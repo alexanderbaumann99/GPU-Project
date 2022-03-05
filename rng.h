@@ -11,7 +11,8 @@ the name of the author above.
 
 using namespace std;
 
-#define Mtraj (1048576)
+#define Mtraj (32768)
+#define Mtraj_inner (1024)
 #define MoPI (3.1415927f)
 
 ////////////////////////////////////////////////////////////////
@@ -42,7 +43,9 @@ using namespace std;
 // Datatype definitions
 ////////////////////////////////////////////////////////////////
 // CMRG datatype
-typedef int TabSeedCMRG_t[Mtraj][6];
+
+// Modify TabSeedCMRG_t[Mtraj][Mtraj][6] including inner trajectories in second coordinate
+typedef int TabSeedCMRG_t[Mtraj][Mtraj_inner][6];
 
 ////////////////////////////////////////////////////////////////
 // Memory for RNG use 

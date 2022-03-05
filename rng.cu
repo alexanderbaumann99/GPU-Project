@@ -6,6 +6,7 @@ the name of the author above.
 ***************************************************************/
 
 #include "rng.h"
+#include <cuda_runtime.h>
 
 ////////////////////////////////////////////////////////////////
 // Memory for RNG use 
@@ -145,14 +146,16 @@ void PostInitDataCMRG()
  double s2[3] = {1.0, 1.0, 1.0};
 
  for (j = 0; j < Mtraj; j++) {
-	CMRGp[0][j][0] = (int) s1[0]; 
-	CMRGp[0][j][1] = (int) s1[1];
-	CMRGp[0][j][2] = (int) s1[2];
-	CMRGp[0][j][3] = (int) s2[0];
-	CMRGp[0][j][4] = (int) s2[1];
-	CMRGp[0][j][5] = (int) s2[2];
-	MatVecModM (A1, s1, s1, m1);
-    MatVecModM (A2, s2, s2, m2);
+     for (int k = 0; k < Mtraj_inner; k++) {
+         CMRGp[0][j][k][0] = (int)s1[0];
+         CMRGp[0][j][k][1] = (int)s1[1];
+         CMRGp[0][j][k][2] = (int)s1[2];
+         CMRGp[0][j][k][3] = (int)s2[0];
+         CMRGp[0][j][k][4] = (int)s2[1];
+         CMRGp[0][j][k][5] = (int)s2[2];
+         MatVecModM(A1, s1, s1, m1);
+         MatVecModM(A2, s2, s2, m2);
+     }
  }
 
  // - Copy CMRG data on the GPU
