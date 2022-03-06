@@ -498,10 +498,10 @@ int main()
 
 	printf("Check2");
 
-	dim3 num_threads(128, 128);
-	dim3 num_blocks(512, 128);
+	dim3 num_threads(32, 32);
+	dim3 num_blocks(128, 128);
 	// Modify NTPB to 2 dimensions
-	MC_k <<< num_blocks, num_threads, 2 * 128 * sizeof(float) >> > (P1, P2, x_0, dt, B, K,
+	MC_k <<< num_blocks, num_threads, 2 * 32 * sizeof(float) >> > (P1, P2, x_0, dt, B, K,
 		leng, M, Ntraj, CMRG,time,price,i_t,sum,sum2);
 	printf("Check3");
 	cudaEventRecord(stop, 0);					// GPU timer instructions
