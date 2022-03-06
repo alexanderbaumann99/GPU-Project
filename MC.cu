@@ -10,9 +10,6 @@ the name of the author above.
 #include "device_launch_parameters.h"
 #include <iostream>
 
-#define nt 15
-#define nk 6
-
 // Function that catches the error 
 void testCUDA(cudaError_t error, const char* file, int line) {
 	if (error != cudaSuccess) {
@@ -24,6 +21,8 @@ void testCUDA(cudaError_t error, const char* file, int line) {
 // of the macros __FILE__ and __LINE__
 #define testCUDA(error) (testCUDA(error, __FILE__ , __LINE__))
 
+#define nt 15
+#define nk 6
 
 __constant__ float Tg[nt];
 __constant__ float rg[nt];
@@ -353,8 +352,8 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 
 	// First Loop over the T_i -> predetermined schedule
 	for (k = 0; k < M; k++) {
-		// Second Loop: Refines the time steps for more precise calculation of the price process
 		if (gb_index_y == 0) {
+			//Going to next time point with threadIdx.y==0
 			for (i = 1; i <= L; i++) {
 				t = dt * dt * (i + L * k);
 				q = timeIdx(t);
@@ -368,6 +367,7 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 				Euler_d(&Skp1, Sk, rg[q], v, dt, g0);
 				Sk = Skp1;
 			}
+			//Reached new time point
 			// Update I
 			P += (Sk < B);
 			time[gb_index_x + k * blockDim.x * gridDim.x] = k;
@@ -375,12 +375,12 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 			i_t[gb_index_x + k * blockDim.x * gridDim.x] = P;
 		}
 		__syncthreads();
-
+		//From here, do the complete inner trajectories with threadIdx.y
 		Sk = price[gb_index_x + k * blockDim.x * gridDim.x];
 		P = i_t[gb_index_x + k * blockDim.x * gridDim.x];
 		for (int j = k+1; j < M; j++) {
 			for (i = 1; i <= L; i++) {
-				t = dt * dt * (i + L * k);
+				t = dt * dt * (i + L * j); //Changed k to j
 				q = timeIdx(t);
 				// Local Volatility
 				vol_d(Sk, x_0, t, &v, q);
@@ -395,10 +395,10 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 			// Update I
 			P += (Sk < B);
 		}
-
-		H[threadIdx.y] = expf(-rt_int(0.0f, t, 0, q)) * fmaxf(0.0f, Sk - K) * ((P <= P2) && (P >= P1)) / Ntraj;
-		// ???
-		H[threadIdx.x + blockDim.x] = Ntraj * H[threadIdx.x] * H[threadIdx.x];
+		// Changed discount factor
+		H[threadIdx.y] = expf(-rt_int(dt * dt *L * k, t, 0, q)) * fmaxf(0.0f, Sk - K) * ((P <= P2) && (P >= P1)) / Ntraj;
+		// Changed index to .y
+		H[threadIdx.y + blockDim.y] = Ntraj * H[threadIdx.y] * H[threadIdx.y];
 		__syncthreads();
 
 		i = blockDim.y / 2;
@@ -513,7 +513,7 @@ int main()
 	cudaMemcpy(sum_c, sum, sizeof(float) * Ntraj * M, cudaMemcpyDeviceToHost);
 	printf("Check4");
 	cudaFree(sum);
-	printf("Check5");
+	printf("Check5\n");
 	printf("The price is equal to %f",sum_c[0]);
 
 	printf("Execution time %f ms\n", Tim);
