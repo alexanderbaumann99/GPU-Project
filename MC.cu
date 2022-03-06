@@ -393,7 +393,7 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 				Skp1_inner = Skp1_inner;
 			}
 			// Update I
-			P_outer += (Sk_inner < B);
+			P_inner += (Sk_inner < B);
 		}
 		// Changed discount factor
 		H[threadIdx.y] = expf(-rt_int(dt * dt *L * k, t, 0, q)) * fmaxf(0.0f, Sk_inner - K) * ((P_inner <= P2) && (P_inner >= P1)) / Ntraj;
