@@ -358,7 +358,7 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 				t = dt * dt * (i + L * k);
 				q = timeIdx(t);
 				// Local Volatility
-				vol_d(Sk, x_0, t, &v, q);
+				vol_d(Sk_outer, x_0, t, &v, q);
 				// Get uniformly RN
 				CMRG_d(&a0, &a1, &a2, &a3, &a4, &a5, &g0, &g1, 2);
 				// Get Gaussian
@@ -383,7 +383,7 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 				t = dt * dt * (i + L * j); //Changed k to j
 				q = timeIdx(t);
 				// Local Volatility
-				vol_d(Sk, x_0, t, &v, q);
+				vol_d(Sk_inner, x_0, t, &v, q);
 				// Get uniformly RN
 				CMRG_d(&a0, &a1, &a2, &a3, &a4, &a5, &g0, &g1, 2);
 				// Get Gaussian
