@@ -339,14 +339,14 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 	int gb_index_x = threadIdx.x + blockIdx.x * blockDim.x;
 	// Define global index in y-coordinate
 	int gb_index_y = threadIdx.y + blockIdx.y* blockDim.y;
-	int a0, a1, a2, a3, a4, a5, k, i, q, P;
-	float g0, g1, Sk, Skp1, t, v;
+	int a0, a1, a2, a3, a4, a5, k, i, q, P_outer,P_inner;
+	float g0, g1, Sk_outer, Skp1_outer,Sk_inner, Skp1_inner, t, v;
 
 	extern __shared__ float H[];
 	 
 	
-	Sk = x_0;
-	P = 0;
+	Sk_outer = x_0;
+	P_outer = 0;
 
 	CMRG_get_d(&a0, &a1, &a2, &a3, &a4, &a5, pt_cmrg[0][gb_index_x][gb_index_y]);
 
@@ -364,20 +364,20 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 				// Get Gaussian
 				BoxMuller_d(&g0, &g1);
 				// Update price into Skpl
-				Euler_d(&Skp1, Sk, rg[q], v, dt, g0);
-				Sk = Skp1;
+				Euler_d(&Skp1_outer, Sk_outer, rg[q], v, dt, g0);
+				Sk_outer = Skp1_outer;
 			}
 			//Reached new time point
 			// Update I
-			P += (Sk < B);
+			P_outer += (Sk_outer < B);
 			time[gb_index_x + k * blockDim.x * gridDim.x] = k;
-			price[gb_index_x + k * blockDim.x * gridDim.x] = Sk;
-			i_t[gb_index_x + k * blockDim.x * gridDim.x] = P;
+			price[gb_index_x + k * blockDim.x * gridDim.x] = Sk_outer;
+			i_t[gb_index_x + k * blockDim.x * gridDim.x] = P_outer;
 		}
 		__syncthreads();
 		//From here, do the complete inner trajectories with threadIdx.y
-		Sk = price[gb_index_x + k * blockDim.x * gridDim.x];
-		P = i_t[gb_index_x + k * blockDim.x * gridDim.x];
+		Sk_inner = price[gb_index_x + k * blockDim.x * gridDim.x];
+		P_inner = i_t[gb_index_x + k * blockDim.x * gridDim.x];
 		for (int j = k+1; j < M; j++) {
 			for (i = 1; i <= L; i++) {
 				t = dt * dt * (i + L * j); //Changed k to j
@@ -389,14 +389,14 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 				// Get Gaussian
 				BoxMuller_d(&g0, &g1);
 				// Update price into Skpl
-				Euler_d(&Skp1, Sk, rg[q], v, dt, g0);
-				Sk = Skp1;
+				Euler_d(&Skp1_inner, Sk_inner, rg[q], v, dt, g0);
+				Skp1_inner = Skp1_inner;
 			}
 			// Update I
-			P += (Sk < B);
+			P_outer += (Sk_inner < B);
 		}
 		// Changed discount factor
-		H[threadIdx.y] = expf(-rt_int(dt * dt *L * k, t, 0, q)) * fmaxf(0.0f, Sk - K) * ((P <= P2) && (P >= P1)) / Ntraj;
+		H[threadIdx.y] = expf(-rt_int(dt * dt *L * k, t, 0, q)) * fmaxf(0.0f, Sk_inner - K) * ((P_inner <= P2) && (P_inner >= P1)) / Ntraj;
 		// Changed index to .y
 		H[threadIdx.y + blockDim.y] = Ntraj * H[threadIdx.y] * H[threadIdx.y];
 		__syncthreads();
@@ -484,8 +484,6 @@ int main()
 	cudaMemset(sum, 0.0f, sizeof(float) * Ntraj * M);
 	cudaMemset(sum2, 0.0f, sizeof(float) * Ntraj * M);
 	printf("Check1");
-	cudaMemcpy(time_c, time, sizeof(float) * Ntraj * M, cudaMemcpyDeviceToHost);
-	printf("Check4");
 	
 	VarMalloc();
 	PostInitDataCMRG();
