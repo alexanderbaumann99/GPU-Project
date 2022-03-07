@@ -333,7 +333,7 @@ __device__ void Euler_d(float* S2, float S1, float r0,
 __global__ void MC_k(int P1, int P2, float x_0, float dt,
 	float B, float K, int L, int M,
 	int Ntraj, TabSeedCMRG_t* pt_cmrg,
-	float* time, float* price, float* i_t, float* sum, float* sum2) {
+	float* time, float* price, int* i_t, float* sum, float* sum2) {
 
 	// Define global index in x-coordinate
 	int gb_index_x = threadIdx.x + blockIdx.x * blockDim.x;
@@ -383,14 +383,16 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 				t = dt * dt * (i + L * j); //Changed k to j
 				q = timeIdx(t);
 				// Local Volatility
+				//Change maybe x_0
 				vol_d(Sk_inner, x_0, t, &v, q);
 				// Get uniformly RN
 				CMRG_d(&a0, &a1, &a2, &a3, &a4, &a5, &g0, &g1, 2);
 				// Get Gaussian
+				//Error occurs here becuase of cosf 
 				BoxMuller_d(&g0, &g1);
 				// Update price into Skpl
 				Euler_d(&Skp1_inner, Sk_inner, rg[q], v, dt, g0);
-				Skp1_inner = Skp1_inner;
+				Sk_inner = Skp1_inner;
 			}
 			// Update I
 			P_inner += (Sk_inner < B);
@@ -463,27 +465,26 @@ int main()
 	int leng = Nt / M;
 	float Tim;							// GPU timer instructions
 	cudaEvent_t start, stop;			// GPU timer instructions
-	int Ntraj = 512 * 128;
+	int Ntraj = 32 * 32;
 	float* time;
 	float* price;
-	float* i_t;
+	int* i_t;
 	float* sum;
 	float* sum2;
 	float* time_c = (float*)malloc(sizeof(float) * Ntraj * M);
 	float* price_c = (float*)malloc(sizeof(float) * Ntraj * M);
-	float* i_t_c = (float*)malloc(sizeof(float) * Ntraj * M);
+	int* i_t_c = (int*)malloc(sizeof(int) * Ntraj * M);
 	float* sum_c = (float*)malloc(sizeof(float) * Ntraj * M);
 	float* sum2_c = (float*)malloc(sizeof(float) * Ntraj * M);
 
 	cudaMalloc(&time, sizeof(float) * Ntraj * M);
 	cudaMalloc(&price, sizeof(float) * Ntraj * M);
-	cudaMalloc(&i_t, sizeof(float) * Ntraj * M);
+	cudaMalloc(&i_t, sizeof(int) * Ntraj * M);
 	cudaMalloc(&sum, sizeof(float) * Ntraj * M);
 	cudaMalloc(&sum2, sizeof(float) * Ntraj * M);
 
 	cudaMemset(sum, 0.0f, sizeof(float) * Ntraj * M);
 	cudaMemset(sum2, 0.0f, sizeof(float) * Ntraj * M);
-	printf("Check1");
 	
 	VarMalloc();
 	PostInitDataCMRG();
@@ -494,28 +495,33 @@ int main()
 	cudaEventCreate(&stop);				// GPU timer instructions
 	cudaEventRecord(start, 0);			// GPU timer instructions
 
-	printf("Check2");
-
 	dim3 num_threads(32, 32);
 	dim3 num_blocks(128, 128);
 	// Modify NTPB to 2 dimensions
+	testCUDA(cudaGetLastError());
+	printf("Kernel launch\n");
 	MC_k <<< num_blocks, num_threads, 2 * 32 * sizeof(float) >> > (P1, P2, x_0, dt, B, K,
 		leng, M, Ntraj, CMRG,time,price,i_t,sum,sum2);
-	printf("Check3");
+	cudaDeviceSynchronize();
+	testCUDA(cudaGetLastError());
+	printf("Kernel end\n");
+
 	cudaEventRecord(stop, 0);					// GPU timer instructions
 	cudaEventSynchronize(stop);					// GPU timer instructions
 	cudaEventElapsedTime(&Tim, start, stop);	// GPU timer instructions
 	cudaEventDestroy(start);					// GPU timer instructions
 	cudaEventDestroy(stop);						// GPU timer instructions
-	printf("Check3.5");
-	cudaMemcpy(sum_c, sum, sizeof(float) * Ntraj * M, cudaMemcpyDeviceToHost);
-	printf("Check4");
-	cudaFree(sum);
-	printf("Check5\n");
-	printf("The price is equal to %f",sum_c[0]);
 
+	cudaMemcpy(sum_c, sum, sizeof(float) * Ntraj * M, cudaMemcpyDeviceToHost);
+
+	printf("The price is equal to %f",sum_c[0]);
 	printf("Execution time %f ms\n", Tim);
 
+	cudaFree(price);
+	cudaFree(i_t);
+	cudaFree(time);
+	cudaFree(sum);
+	cudaFree(sum2);
 
 	FreeCMRG();
 	FreeVar();
