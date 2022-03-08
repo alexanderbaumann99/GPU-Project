@@ -418,14 +418,26 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 			P_inner += (Sk_inner < B);
 		}
 		
-		/*
-		if (gb_index_x == 0 && gb_index_y == 1) {
+	
+		if (gb_index_x == 0 && gb_index_y == 0) {
 			printf("Thread (%d|%d) Check2 at iter %d\nS: %f\nP: %d\n", gb_index_x, gb_index_y, k, Sk_inner, P_inner);
-		}*/
+		}
+		
 		
 		
 		// Changed discount factor
-		H[threadIdx.y] = expf(-rt_int(dt * dt * L * k, t, 0, q)) * fmaxf(0.0f, Sk_inner - K) * ((P_inner <= P2) && (P_inner >= P1)) / Ntraj;		
+		if(gb_index_x == 0 && gb_index_y == 0)	{
+			float a = expf(-rt_int(dt * dt * L * k, t, 0, q));
+			float b = fmaxf(0.0f, Sk_inner - K);
+			float c = ((P_inner <= P2) && (P_inner >= P1));
+			printf("exp %f, fmax %f, indicatrice %f\n", a, b, c);
+			printf("product %f\n", a*b*c);
+			printf("h %f", a*b*c/Ntraj);
+		}
+			
+		H[threadIdx.y] = expf(-rt_int(dt * dt * L * k, t, 0, q)) * fmaxf(0.0f, Sk_inner - K) * ((P_inner <= P2) && (P_inner >= P1)) / Ntraj;
+		if(gb_index_x == 0 && gb_index_y == 0)	
+			printf("H0 init %f\n", H[0]);	
 		// Changed index to .y
 		H[threadIdx.y + blockDim.y] = Ntraj * H[threadIdx.y] * H[threadIdx.y];
 		__syncthreads();
@@ -438,6 +450,9 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 			}
 			__syncthreads();
 			i /= 2;
+			if (gb_index_x == 0 && gb_index_y == 0) {
+				printf("H0: %f\n", H[0]);
+			}
 		}
 		
 		//atomicAdd funktioniert nicht
