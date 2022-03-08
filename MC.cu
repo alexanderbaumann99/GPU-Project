@@ -5,10 +5,16 @@ Those who re-use this code should mention in their code
 the name of the author above.
 ***************************************************************/
 #include "rng.h"
-#include <cuda.h>
 #include <cuda_runtime.h>
-#include "device_launch_parameters.h"
+#include <device_launch_parameters.h>
 #include <iostream>
+#include <stdio.h>
+
+
+#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ < 200)
+#define printf(f, ...) ((void)(f, __VA_ARGS__),0)
+#endif
+
 
 // Function that catches the error 
 void testCUDA(cudaError_t error, const char* file, int line) {
@@ -23,6 +29,11 @@ void testCUDA(cudaError_t error, const char* file, int line) {
 
 #define nt 15
 #define nk 6
+
+#define NT_x 32
+#define NT_y 32
+#define NB_x 64
+#define NB_y 64
 
 __constant__ float Tg[nt];
 __constant__ float rg[nt];
@@ -117,8 +128,8 @@ void parameters()
 	}
 	fclose(ParFp);
 
-
 	cudaMemcpyToSymbol(Kg, Kgc, nk * sizeof(float));
+	testCUDA(cudaGetLastError());
 	cudaMemcpyToSymbol(Tg, Tgc, nt * sizeof(float));
 	cudaMemcpyToSymbol(rg, rgc, nt * sizeof(float));
 	cudaMemcpyToSymbol(Cg, Cgc, 16 * (nt - 1) * (nk - 1) * sizeof(float));
@@ -309,6 +320,7 @@ __device__ void CMRG_d(int* a0, int* a1, int* a2, int* a3, int* a4,
 __device__ void BoxMuller_d(float* g0, float* g1) {
 
 	float loc;
+	
 	if (*g1 < 1.45e-6f) {
 		loc = sqrtf(-2.0f * logf(0.00001f)) * cosf(*g0 * 2.0f * MoPI);
 	}
@@ -329,7 +341,8 @@ __device__ void Euler_d(float* S2, float S1, float r0,
 	*S2 = S1 * (1.0f + r0 * dt * dt + sigma * dt * e);
 }
 
-// Monte Carlo routine
+
+	// Monte Carlo routine
 __global__ void MC_k(int P1, int P2, float x_0, float dt,
 	float B, float K, int L, int M,
 	int Ntraj, TabSeedCMRG_t* pt_cmrg,
@@ -338,34 +351,39 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 	// Define global index in x-coordinate
 	int gb_index_x = threadIdx.x + blockIdx.x * blockDim.x;
 	// Define global index in y-coordinate
-	int gb_index_y = threadIdx.y + blockIdx.y* blockDim.y;
-	int a0, a1, a2, a3, a4, a5, k, i, q, P_outer,P_inner;
-	float g0, g1, Sk_outer, Skp1_outer,Sk_inner, Skp1_inner, t, v;
+	int gb_index_y = threadIdx.y + blockIdx.y * blockDim.y;
+	if (gb_index_x == 0 && gb_index_y == 0) {
+		printf("Thread (0|0) Check1\n");
+	}
+	int a0, a1, a2, a3, a4, a5, k, i, q, P_outer, P_inner;
+	float g0, g1, Sk_outer, Skp1_outer, Sk_inner, Skp1_inner, t, v;
 
 	extern __shared__ float H[];
-	 
-	
+
 	Sk_outer = x_0;
 	P_outer = 0;
 
 	CMRG_get_d(&a0, &a1, &a2, &a3, &a4, &a5, pt_cmrg[0][gb_index_x][gb_index_y]);
+	
 
 	// First Loop over the T_i -> predetermined schedule
 	for (k = 0; k < M; k++) {
 		if (gb_index_y == 0) {
+			
 			//Going to next time point with threadIdx.y==0
 			for (i = 1; i <= L; i++) {
 				t = dt * dt * (i + L * k);
 				q = timeIdx(t);
 				// Local Volatility
 				vol_d(Sk_outer, x_0, t, &v, q);
-				// Get uniformly RN
+				// Get untimeIdxiformly RN
 				CMRG_d(&a0, &a1, &a2, &a3, &a4, &a5, &g0, &g1, 2);
 				// Get Gaussian
 				BoxMuller_d(&g0, &g1);
 				// Update price into Skpl
 				Euler_d(&Skp1_outer, Sk_outer, rg[q], v, dt, g0);
 				Sk_outer = Skp1_outer;
+				
 			}
 			//Reached new time point
 			// Update I
@@ -378,17 +396,19 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 		//From here, do the complete inner trajectories with threadIdx.y
 		Sk_inner = price[gb_index_x + k * blockDim.x * gridDim.x];
 		P_inner = i_t[gb_index_x + k * blockDim.x * gridDim.x];
-		for (int j = k+1; j < M; j++) {
+		float x0_inner= price[gb_index_x + k * blockDim.x * gridDim.x];
+		
+		
+		for (int j = k + 1; j < M; j++) {
 			for (i = 1; i <= L; i++) {
 				t = dt * dt * (i + L * j); //Changed k to j
 				q = timeIdx(t);
 				// Local Volatility
-				//Change maybe x_0
-				vol_d(Sk_inner, x_0, t, &v, q);
+				// Müssen wir x_0 ändern????
+				vol_d(Sk_inner, x0_inner, t, &v, q);
 				// Get uniformly RN
 				CMRG_d(&a0, &a1, &a2, &a3, &a4, &a5, &g0, &g1, 2);
 				// Get Gaussian
-				//Error occurs here becuase of cosf 
 				BoxMuller_d(&g0, &g1);
 				// Update price into Skpl
 				Euler_d(&Skp1_inner, Sk_inner, rg[q], v, dt, g0);
@@ -397,8 +417,15 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 			// Update I
 			P_inner += (Sk_inner < B);
 		}
+		
+		/*
+		if (gb_index_x == 0 && gb_index_y == 1) {
+			printf("Thread (%d|%d) Check2 at iter %d\nS: %f\nP: %d\n", gb_index_x, gb_index_y, k, Sk_inner, P_inner);
+		}*/
+		
+		
 		// Changed discount factor
-		H[threadIdx.y] = expf(-rt_int(dt * dt *L * k, t, 0, q)) * fmaxf(0.0f, Sk_inner - K) * ((P_inner <= P2) && (P_inner >= P1)) / Ntraj;
+		H[threadIdx.y] = expf(-rt_int(dt * dt * L * k, t, 0, q)) * fmaxf(0.0f, Sk_inner - K) * ((P_inner <= P2) && (P_inner >= P1)) / Ntraj;		
 		// Changed index to .y
 		H[threadIdx.y + blockDim.y] = Ntraj * H[threadIdx.y] * H[threadIdx.y];
 		__syncthreads();
@@ -412,40 +439,24 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 			__syncthreads();
 			i /= 2;
 		}
-
+		
+		//atomicAdd funktioniert nicht
 		if (threadIdx.y == 0) {
-			atomicAdd(&sum[gb_index_x + k * blockDim.x * gridDim.x], H[0]);
-			atomicAdd(&sum2[gb_index_x + k * blockDim.x * gridDim.x], H[blockDim.y]);
+			atomicAdd(&(sum[gb_index_x + k * blockDim.x * gridDim.x]), H[0]);
+			atomicAdd(&(sum2[gb_index_x + k * blockDim.x * gridDim.x]), H[blockDim.y]);
 		}
-
-
-	}
-
-
-	/*// Reduction phase
-	// Calculate fair price at t=0 for this trajectory
-	H[threadIdx.x] = expf(-rt_int(0.0f, t, 0, q)) * fmaxf(0.0f, Sk - K) * ((P <= P2) && (P >= P1)) / Ntraj;
-	// ???
-	H[threadIdx.x + blockDim.x] = Ntraj * H[threadIdx.x] * H[threadIdx.x];
-	__syncthreads();
-
-	i = blockDim.x / 2;
-	while (i != 0) {
-		if (threadIdx.x < i) {
-			H[threadIdx.x] += H[threadIdx.x + i];
-			H[threadIdx.x + blockDim.x] += H[threadIdx.x + blockDim.x + i];
+		
+		if (gb_index_x == 0 && gb_index_y == 0) {
+			printf("Thread (%d|%d) Check3\n X: %f\n", gb_index_x, gb_index_y,H[0]);
 		}
-		__syncthreads();
-		i /= 2;
+ 		
 	}
-
-	if (threadIdx.x == 0) {
-		atomicAdd(sum, H[0]);
-		atomicAdd(sum2, H[blockDim.x]);
-	}
-
-	//CMRG_set_d(&a0, &a1, &a2, &a3, &a4, &a5, pt_cmrg[0][gb_index_x]);*/
+	
 }
+
+
+
+
 
 
 int main()
@@ -465,7 +476,7 @@ int main()
 	int leng = Nt / M;
 	float Tim;							// GPU timer instructions
 	cudaEvent_t start, stop;			// GPU timer instructions
-	int Ntraj = 32 * 32;
+	int Ntraj = NB_y*NT_y;
 	float* time;
 	float* price;
 	int* i_t;
@@ -482,40 +493,45 @@ int main()
 	cudaMalloc(&i_t, sizeof(int) * Ntraj * M);
 	cudaMalloc(&sum, sizeof(float) * Ntraj * M);
 	cudaMalloc(&sum2, sizeof(float) * Ntraj * M);
-
+	
 	cudaMemset(sum, 0.0f, sizeof(float) * Ntraj * M);
 	cudaMemset(sum2, 0.0f, sizeof(float) * Ntraj * M);
-	
+	testCUDA(cudaGetLastError());
 	VarMalloc();
+	testCUDA(cudaGetLastError());
 	PostInitDataCMRG();
-
+	testCUDA(cudaGetLastError());
 	parameters();
-
+	
 	cudaEventCreate(&start);			// GPU timer instructions
 	cudaEventCreate(&stop);				// GPU timer instructions
 	cudaEventRecord(start, 0);			// GPU timer instructions
 
-	dim3 num_threads(32, 32);
-	dim3 num_blocks(128, 128);
+	//Maximum threads per block 1024=32*32
+	dim3 num_threads(NT_x, NT_x);
+	dim3 num_blocks(NB_x,NB_y);
 	// Modify NTPB to 2 dimensions
 	testCUDA(cudaGetLastError());
 	printf("Kernel launch\n");
-	MC_k <<< num_blocks, num_threads, 2 * 32 * sizeof(float) >> > (P1, P2, x_0, dt, B, K,
-		leng, M, Ntraj, CMRG,time,price,i_t,sum,sum2);
+	MC_k << < num_blocks, num_threads, 2 * 32 * sizeof(float) >> > (P1, P2, x_0, dt, B, K,
+		leng, M, Ntraj, CMRG, time, price, i_t, sum, sum2);
 	cudaDeviceSynchronize();
 	testCUDA(cudaGetLastError());
 	printf("Kernel end\n");
-
 	cudaEventRecord(stop, 0);					// GPU timer instructions
 	cudaEventSynchronize(stop);					// GPU timer instructions
 	cudaEventElapsedTime(&Tim, start, stop);	// GPU timer instructions
 	cudaEventDestroy(start);					// GPU timer instructions
 	cudaEventDestroy(stop);						// GPU timer instructions
-
+	
 	cudaMemcpy(sum_c, sum, sizeof(float) * Ntraj * M, cudaMemcpyDeviceToHost);
+	cudaMemcpy(price_c, price, sizeof(float) * Ntraj * M, cudaMemcpyDeviceToHost);
+	cudaMemcpy(i_t_c, i_t, sizeof(float) * Ntraj * M, cudaMemcpyDeviceToHost);
 
-	printf("The price is equal to %f",sum_c[0]);
+
 	printf("Execution time %f ms\n", Tim);
+	printf("The price is equal to %f \n", price_c[0+99*32*32]);
+	printf("The I_t is equal to %d \n", i_t_c[0+99 * 32 * 32]);
 
 	cudaFree(price);
 	cudaFree(i_t);
@@ -525,8 +541,7 @@ int main()
 
 	FreeCMRG();
 	FreeVar();
-
+	
 	return 0;
 }
-
 
