@@ -32,8 +32,8 @@ void testCUDA(cudaError_t error, const char* file, int line) {
 
 #define NT_x 32
 #define NT_y 32
-#define NB_x 64
-#define NB_y 64
+#define NB_x 8
+#define NB_y 8
 
 __constant__ float Tg[nt];
 __constant__ float rg[nt];
@@ -346,7 +346,7 @@ __device__ void Euler_d(float* S2, float S1, float r0,
 __global__ void MC_k(int P1, int P2, float x_0, float dt,
 	float B, float K, int L, int M,
 	int Ntraj, TabSeedCMRG_t* pt_cmrg,
-	float* time, float* price, int* i_t, float* sum, float* sum2) {
+	int* time, float* price, int* i_t, float* sum, float* sum2,float* X) {
 
 	// Define global index in x-coordinate
 	int gb_index_x = threadIdx.x + blockIdx.x * blockDim.x;
@@ -383,7 +383,7 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 				// Update price into Skpl
 				Euler_d(&Skp1_outer, Sk_outer, rg[q], v, dt, g0);
 				Sk_outer = Skp1_outer;
-				
+								
 			}
 			//Reached new time point
 			// Update I
@@ -404,7 +404,6 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 				t = dt * dt * (i + L * j); //Changed k to j
 				q = timeIdx(t);
 				// Local Volatility
-				// Müssen wir x_0 ändern????
 				vol_d(Sk_inner, x0_inner, t, &v, q);
 				// Get uniformly RN
 				CMRG_d(&a0, &a1, &a2, &a3, &a4, &a5, &g0, &g1, 2);
@@ -417,12 +416,7 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 			// Update I
 			P_inner += (Sk_inner < B);
 		}
-		
-		/*
-		if (gb_index_x == 0 && gb_index_y == 1) {
-			printf("Thread (%d|%d) Check2 at iter %d\nS: %f\nP: %d\n", gb_index_x, gb_index_y, k, Sk_inner, P_inner);
-		}*/
-		
+		X[gb_index_x + k * blockDim.x * gridDim.x] = fmaxf(0.0f, Sk_inner - K) * ((P_inner <= P2) && (P_inner >= P1));
 		
 		// Changed discount factor
 		H[threadIdx.y] = expf(-rt_int(dt * dt * L * k, t, 0, q)) * fmaxf(0.0f, Sk_inner - K) * ((P_inner <= P2) && (P_inner >= P1)) / Ntraj;		
@@ -446,9 +440,7 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 			atomicAdd(&(sum2[gb_index_x + k * blockDim.x * gridDim.x]), H[blockDim.y]);
 		}
 		
-		if (gb_index_x == 0 && gb_index_y == 0) {
-			printf("Thread (%d|%d) Check3\n X: %f\n", gb_index_x, gb_index_y,H[0]);
-		}
+		
  		
 	}
 	
@@ -477,25 +469,29 @@ int main()
 	float Tim;							// GPU timer instructions
 	cudaEvent_t start, stop;			// GPU timer instructions
 	int Ntraj = NB_y*NT_y;
-	float* time;
+	int* time;
 	float* price;
 	int* i_t;
 	float* sum;
 	float* sum2;
-	float* time_c = (float*)malloc(sizeof(float) * Ntraj * M);
-	float* price_c = (float*)malloc(sizeof(float) * Ntraj * M);
-	int* i_t_c = (int*)malloc(sizeof(int) * Ntraj * M);
-	float* sum_c = (float*)malloc(sizeof(float) * Ntraj * M);
-	float* sum2_c = (float*)malloc(sizeof(float) * Ntraj * M);
-
-	cudaMalloc(&time, sizeof(float) * Ntraj * M);
-	cudaMalloc(&price, sizeof(float) * Ntraj * M);
-	cudaMalloc(&i_t, sizeof(int) * Ntraj * M);
-	cudaMalloc(&sum, sizeof(float) * Ntraj * M);
-	cudaMalloc(&sum2, sizeof(float) * Ntraj * M);
+	float* X;
+	int* time_c = (int*)malloc(sizeof(int) * Ntraj * (M ));
+	float* price_c = (float*)malloc(sizeof(float) * Ntraj * (M ));
+	int* i_t_c = (int*)malloc(sizeof(int) * Ntraj * (M ));
+	float* sum_c = (float*)malloc(sizeof(float) * Ntraj * (M ));
+	float* sum2_c = (float*)malloc(sizeof(float) * Ntraj * (M ));
+	float* X_c = (float*)malloc(sizeof(float) * Ntraj*(M ));
 	
-	cudaMemset(sum, 0.0f, sizeof(float) * Ntraj * M);
-	cudaMemset(sum2, 0.0f, sizeof(float) * Ntraj * M);
+	cudaMalloc(&time, sizeof(int) * Ntraj * (M ));
+	cudaMalloc(&price, sizeof(float) * Ntraj * (M ));
+	cudaMalloc(&i_t, sizeof(int) * Ntraj * (M ));
+	cudaMalloc(&sum, sizeof(float) * Ntraj * (M));
+	cudaMalloc(&sum2, sizeof(float) * Ntraj * (M ));
+	cudaMalloc(&sum2, sizeof(float) * Ntraj * (M ));
+	cudaMalloc(&X, sizeof(float) * Ntraj * (M ));
+	
+	cudaMemset(sum, 0.0f, sizeof(float) * Ntraj * (M ));
+	cudaMemset(sum2, 0.0f, sizeof(float) * Ntraj * (M ));
 	testCUDA(cudaGetLastError());
 	VarMalloc();
 	testCUDA(cudaGetLastError());
@@ -512,26 +508,69 @@ int main()
 	dim3 num_blocks(NB_x,NB_y);
 	// Modify NTPB to 2 dimensions
 	testCUDA(cudaGetLastError());
-	printf("Kernel launch\n");
-	MC_k << < num_blocks, num_threads, 2 * 32 * sizeof(float) >> > (P1, P2, x_0, dt, B, K,
-		leng, M, Ntraj, CMRG, time, price, i_t, sum, sum2);
+	//printf("Kernel launch\n");
+	MC_k << < num_blocks, num_threads, 2 * NT_y * sizeof(float) >> > (P1, P2, x_0, dt, B, K,
+		leng, M, Ntraj, CMRG, time, price, i_t, sum, sum2,X);
 	cudaDeviceSynchronize();
 	testCUDA(cudaGetLastError());
-	printf("Kernel end\n");
+	//printf("Kernel end\n");
 	cudaEventRecord(stop, 0);					// GPU timer instructions
 	cudaEventSynchronize(stop);					// GPU timer instructions
 	cudaEventElapsedTime(&Tim, start, stop);	// GPU timer instructions
 	cudaEventDestroy(start);					// GPU timer instructions
 	cudaEventDestroy(stop);						// GPU timer instructions
 	
-	cudaMemcpy(sum_c, sum, sizeof(float) * Ntraj * M, cudaMemcpyDeviceToHost);
-	cudaMemcpy(price_c, price, sizeof(float) * Ntraj * M, cudaMemcpyDeviceToHost);
-	cudaMemcpy(i_t_c, i_t, sizeof(float) * Ntraj * M, cudaMemcpyDeviceToHost);
+	cudaMemcpy(sum_c, sum, sizeof(float) * Ntraj * (M), cudaMemcpyDeviceToHost);
+	cudaMemcpy(price_c, price, sizeof(float) * Ntraj * (M ),cudaMemcpyDeviceToHost);
+	cudaMemcpy(i_t_c, i_t, sizeof(int) * Ntraj * (M ), cudaMemcpyDeviceToHost);
+	cudaMemcpy(time_c, time, sizeof(int) * Ntraj * (M), cudaMemcpyDeviceToHost);
+	cudaMemcpy(X_c, X, sizeof(float) * Ntraj * (M), cudaMemcpyDeviceToHost);
+	
+	FILE* fp;
+
+	fp = fopen("price_c.txt", "w");
+	// check for error here
+	for (unsigned i = 0; i < Ntraj * (M ); i++) {
+		fprintf(fp, "%d, %f\n", i, price_c[i]);
+		
+	}
+	fclose(fp);
+	fp = fopen("price_c.txt", "w");
+	// check for error here
+	for (unsigned i = 0; i < Ntraj * (M ); i++) {
+		fprintf(fp, "%d,%f\n", i, price_c[i]);
+
+	}
+	fclose(fp);
+	fp = fopen("time_c.txt", "w");
+	// check for error here
+	for (unsigned i = 0; i < Ntraj * (M ); i++) {
+		fprintf(fp, "%d,%d\n", i, time_c[i]);}
+	fclose(fp);
+
+	fp = fopen("i_t_c.txt", "w");
+	// check for error here
+	for (unsigned i = 0; i < Ntraj * (M ); i++) {
+		fprintf(fp, "%d,%d\n", i, i_t_c[i]);}
+	fclose(fp);
+
+	fp = fopen("X_c.txt", "w");
+	// check for error here
+	for (unsigned i = 0; i < Ntraj * (M ); i++) {
+		fprintf(fp, "%d,%f\n", i, X_c[i]);
+	}
+	fclose(fp);
+
 
 
 	printf("Execution time %f ms\n", Tim);
-	printf("The price is equal to %f \n", price_c[0+99*32*32]);
-	printf("The I_t is equal to %d \n", i_t_c[0+99 * 32 * 32]);
+	for (int k = 0; k < M; k++) {
+		printf("S at time %d: %f\n", k,price_c[0 + k * Ntraj]);
+		printf("I at time %d: %d\n", k, i_t_c[0 + k * Ntraj]);
+		printf("F at time %d: %f\n",k,sum_c[0 + k * Ntraj]);
+	
+	}
+	
 
 	cudaFree(price);
 	cudaFree(i_t);
