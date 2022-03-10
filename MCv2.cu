@@ -405,8 +405,8 @@ __global__ void MCinner_k(int P1, int P2, float dt,
     }
 
     if (threadIdx.x == 0){
-      atomicAdd(sum[idx_inner], H[0]);
-      atomicAdd(sum2[idx_inner], H[blockDim.x]);
+      atomicAdd(sum + idx_inner, H[0]);
+      atomicAdd(sum2 + idx_inner, H[blockDim.x]);
     }
   }
   
@@ -433,9 +433,7 @@ int main()
   int Ndiscret = Nouter * M;
   int threads_per_block = 1024;
 
-  print("Simulating nested Monte Carlo with\n
-    \tnumber of outer trajectories: %d\n
-    \tnumber of inner trajectories: %d\n", 
+  printf("Simulating nested Monte Carlo with\n \tnumber of outer trajectories: %d\n\tnumber of inner trajectories: %d\n", 
     Nouter, Ninner);
 
 	float* time;
@@ -474,8 +472,8 @@ int main()
     (P1, P2, x_0, dt, B, K, leng, M, Nouter, CMRG, time, price, i_t);
 
   for(int i = 0; i < M; i++){
-    MCouter_k<<<Nblocks,threads_per_block,2*threads_per_block*sizeof(float)>>>
-      (P1, P2, dt, B, K, leng, M, Ninner, CMRG, i+1, time, float* price, int* i_t, float* sum, float* sum2)
+    //MCouter_k<<<Nblocks,threads_per_block,2*threads_per_block*sizeof(float)>>>
+     // (P1, P2, dt, B, K, leng, M, Ninner, CMRG, i+1, time, float* price, int* i_t, float* sum, float* sum2)
   }
 
 	cudaEventRecord(stop,0);			// GPU timer instructions
