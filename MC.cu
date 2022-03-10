@@ -30,10 +30,10 @@ void testCUDA(cudaError_t error, const char* file, int line) {
 #define nt 15
 #define nk 6
 
-#define NT_x 32
-#define NT_y 32
-#define NB_x 64
-#define NB_y 64
+#define NT_x 8
+#define NT_y 8
+#define NB_x 4
+#define NB_y 4
 
 __constant__ float Tg[nt];
 __constant__ float rg[nt];
@@ -371,6 +371,7 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 		if (gb_index_y == 0) {
 			
 			//Going to next time point with threadIdx.y==0
+			//in dieser Schleife stacken sich die Rundungsfehler
 			for (i = 1; i <= L; i++) {
 				t = dt * dt * (i + L * k);
 				q = timeIdx(t);
@@ -383,6 +384,11 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 				// Update price into Skpl
 				Euler_d(&Skp1_outer, Sk_outer, rg[q], v, dt, g0);
 				Sk_outer = Skp1_outer;
+				if (gb_index_x == 0 && gb_index_y == 0 && i==2 && k==0)
+				{
+					//printf("erste outer rg[q] %f, v %f, dt %f, g0 %f\n", rg[q], v, dt, g0);
+				}
+				
 				
 			}
 			//Reached new time point
@@ -397,6 +403,11 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 		Sk_inner = price[gb_index_x + k * blockDim.x * gridDim.x];
 		P_inner = i_t[gb_index_x + k * blockDim.x * gridDim.x];
 		float x0_inner= price[gb_index_x + k * blockDim.x * gridDim.x];
+
+		if (gb_index_x == 0 && gb_index_y == 0 && k==0)
+		{
+			//printf("recover Sk_inner %f, P_inner %d\n", Sk_inner, P_inner);
+		}
 		
 		
 		for (int j = k + 1; j < M; j++) {
@@ -404,7 +415,6 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 				t = dt * dt * (i + L * j); //Changed k to j
 				q = timeIdx(t);
 				// Local Volatility
-				// Müssen wir x_0 ändern????
 				vol_d(Sk_inner, x0_inner, t, &v, q);
 				// Get uniformly RN
 				CMRG_d(&a0, &a1, &a2, &a3, &a4, &a5, &g0, &g1, 2);
@@ -413,31 +423,37 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 				// Update price into Skpl
 				Euler_d(&Skp1_inner, Sk_inner, rg[q], v, dt, g0);
 				Sk_inner = Skp1_inner;
+				if (gb_index_x == 0 && gb_index_y == 0 && i==1 && k==0 && j==k+10)
+				{
+					printf("erste outer rg[q] %f, v %f, dt %f, g0 %f, Sk_inner %f\n", rg[q], v, dt, g0, Sk_inner);
+				}
 			}
 			// Update I
 			P_inner += (Sk_inner < B);
 		}
+	
 		
 	
 		if (gb_index_x == 0 && gb_index_y == 0) {
-			printf("Thread (%d|%d) Check2 at iter %d\nS: %f\nP: %d\n", gb_index_x, gb_index_y, k, Sk_inner, P_inner);
+			//printf("rg[q] %f, v %f, dt %f, g0 %f\n", rg[q], v, dt, g0);
+			//printf("Thread (%d|%d) Check2 at iter %d\nS: %f\nP: %d\n", gb_index_x, gb_index_y, k, Sk_inner, P_inner);
 		}
 		
 		
 		
 		// Changed discount factor
-		if(gb_index_x == 0 && gb_index_y == 0)	{
+		/*if(gb_index_x == 0 && gb_index_y == 0)	{
 			float a = expf(-rt_int(dt * dt * L * k, t, 0, q));
 			float b = fmaxf(0.0f, Sk_inner - K);
 			float c = ((P_inner <= P2) && (P_inner >= P1));
 			printf("exp %f, fmax %f, indicatrice %f\n", a, b, c);
 			printf("product %f\n", a*b*c);
 			printf("h %f", a*b*c/Ntraj);
-		}
+		}*/
 			
 		H[threadIdx.y] = expf(-rt_int(dt * dt * L * k, t, 0, q)) * fmaxf(0.0f, Sk_inner - K) * ((P_inner <= P2) && (P_inner >= P1)) / Ntraj;
 		if(gb_index_x == 0 && gb_index_y == 0)	
-			printf("H0 init %f\n", H[0]);	
+			//printf("H0 init %f\n", H[0]);	
 		// Changed index to .y
 		H[threadIdx.y + blockDim.y] = Ntraj * H[threadIdx.y] * H[threadIdx.y];
 		__syncthreads();
@@ -451,7 +467,7 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 			__syncthreads();
 			i /= 2;
 			if (gb_index_x == 0 && gb_index_y == 0) {
-				printf("H0: %f\n", H[0]);
+				//printf("H0: %f\n", H[0]);
 			}
 		}
 		
@@ -462,7 +478,7 @@ __global__ void MC_k(int P1, int P2, float x_0, float dt,
 		}
 		
 		if (gb_index_x == 0 && gb_index_y == 0) {
-			printf("Thread (%d|%d) Check3\n X: %f\n", gb_index_x, gb_index_y,H[0]);
+			printf("Thread (%d|%d) Check3\n X: %f\n", gb_index_x, gb_index_y,sum[0+k * blockDim.x * gridDim.x]);
 		}
  		
 	}
@@ -497,20 +513,20 @@ int main()
 	int* i_t;
 	float* sum;
 	float* sum2;
-	float* time_c = (float*)malloc(sizeof(float) * Ntraj * M);
-	float* price_c = (float*)malloc(sizeof(float) * Ntraj * M);
-	int* i_t_c = (int*)malloc(sizeof(int) * Ntraj * M);
-	float* sum_c = (float*)malloc(sizeof(float) * Ntraj * M);
-	float* sum2_c = (float*)malloc(sizeof(float) * Ntraj * M);
+	float* time_c = (float*)malloc(sizeof(float) * Ntraj * (M + 1));
+	float* price_c = (float*)malloc(sizeof(float) * Ntraj * (M + 1));
+	int* i_t_c = (int*)malloc(sizeof(int) * Ntraj * (M + 1));
+	float* sum_c = (float*)malloc(sizeof(float) * Ntraj * (M + 1));
+	float* sum2_c = (float*)malloc(sizeof(float) * Ntraj * (M + 1));
 
-	cudaMalloc(&time, sizeof(float) * Ntraj * M);
-	cudaMalloc(&price, sizeof(float) * Ntraj * M);
-	cudaMalloc(&i_t, sizeof(int) * Ntraj * M);
-	cudaMalloc(&sum, sizeof(float) * Ntraj * M);
-	cudaMalloc(&sum2, sizeof(float) * Ntraj * M);
+	cudaMalloc(&time, sizeof(float) * Ntraj * (M + 1));
+	cudaMalloc(&price, sizeof(float) * Ntraj * (M + 1));
+	cudaMalloc(&i_t, sizeof(int) * Ntraj * (M + 1));
+	cudaMalloc(&sum, sizeof(float) * Ntraj * (M+1));
+	cudaMalloc(&sum2, sizeof(float) * Ntraj * (M + 1));
 	
-	cudaMemset(sum, 0.0f, sizeof(float) * Ntraj * M);
-	cudaMemset(sum2, 0.0f, sizeof(float) * Ntraj * M);
+	cudaMemset(sum, 0.0f, sizeof(float) * Ntraj * (M + 1));
+	cudaMemset(sum2, 0.0f, sizeof(float) * Ntraj * (M + 1));
 	testCUDA(cudaGetLastError());
 	VarMalloc();
 	testCUDA(cudaGetLastError());
@@ -545,8 +561,8 @@ int main()
 
 
 	printf("Execution time %f ms\n", Tim);
-	printf("The price is equal to %f \n", price_c[0+99*32*32]);
-	printf("The I_t is equal to %d \n", i_t_c[0+99 * 32 * 32]);
+	printf("The price is equal to %f \n", price_c[0]);
+	printf("The I_t is equal to %d \n", i_t_c[0]);
 
 	cudaFree(price);
 	cudaFree(i_t);
