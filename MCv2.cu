@@ -324,7 +324,7 @@ __global__ void MCouter_k(int P1, int P2, float x_0, float dt,
     // can we make this access to pt_cmrg contiguous?
     CMRG_get_d(&a0, &a1, &a2, &a3, &a4, &a5, pt_cmrg[0][idx_outer][0]);
 
-    for (k=0; k<M; k++){
+    for (k=0; k<M-1; k++){
       for (i=1; i<=L; i++){
         t = dt*dt*(i+L*k);
         q = timeIdx(t);
@@ -354,7 +354,6 @@ __global__ void MCinner_k(int P1, int P2, float dt,
 					 float B, float K, int L, int M,
 					 int Ninner, TabSeedCMRG_t *pt_cmrg, int k_start,
 					 float* time, float* price, int* i_t, float* sum, float* sum2){
-  // DER MEMORY ZUGRIFF IST HIer NOCH NICHT KORREKT
 
   // blockIdx.x -> index outer trajectory
   int idx_outer = blockIdx.x;
@@ -366,11 +365,11 @@ __global__ void MCinner_k(int P1, int P2, float dt,
 
   extern __shared__ float H[];
 
-
   if(idx_inner < Ninner){
 
-    Sk = price[idx_inner];
-    P = i_t[idx_inner];
+    // is it quicker to make this access to global memory in a batch once per block?
+    Sk = price[idx_outer];
+    P = i_t[idx_outer];
 
     CMRG_get_d(&a0, &a1, &a2, &a3, &a4, &a5, pt_cmrg[0][idx_outer][idx_inner]);
 
@@ -378,7 +377,7 @@ __global__ void MCinner_k(int P1, int P2, float dt,
       for (i=1; i<=L; i++){
         t = dt*dt*(i+L*k);
         q = timeIdx(t);
-        vol_d(Sk, price[idx_inner], t, &v, q);
+        vol_d(Sk, price[idx_outer], t, &v, q);
         CMRG_d(&a0, &a1, &a2, &a3, &a4, &a5, &g0, &g1, 2);
         BoxMuller_d(&g0, &g1);
         Euler_d(&Skp1, Sk, rg[q], v, dt, g0);
@@ -387,7 +386,7 @@ __global__ void MCinner_k(int P1, int P2, float dt,
       P += (Sk<B);
     }
 
-    CMRG_set_d(&a0, &a1, &a2, &a3, &a4, &a5, pt_cmrg[0][idx_outer][0]);
+    CMRG_set_d(&a0, &a1, &a2, &a3, &a4, &a5, pt_cmrg[0][idx_outer][idx_inner]);
 
     // Reduction phase
     H[threadIdx.x] = expf(-rt_int(0.0f, t, 0, q))*fmaxf(0.0f, Sk-K)*((P<=P2)&&(P>=P1))/Ninner;
@@ -405,8 +404,8 @@ __global__ void MCinner_k(int P1, int P2, float dt,
     }
 
     if (threadIdx.x == 0){
-      atomicAdd(sum + idx_inner, H[0]);
-      atomicAdd(sum2 + idx_inner, H[blockDim.x]);
+      atomicAdd(sum + idx_outer, H[0]);
+      atomicAdd(sum2 + idx_outer, H[blockDim.x]);
     }
   }
   
@@ -428,9 +427,9 @@ int main()
 	int leng = Nt/M;
 	float Tim;							// GPU timer instructions
 	cudaEvent_t start, stop;			// GPU timer instructions
-  int Nouter = 32768; //2^15
-  int Ninner = 512; // 2^9
-  int Ndiscret = Nouter * M;
+  int Nouter = 2048; //2^15
+  int Ninner = 2048; // 2^9
+  int Ndiscret = Nouter * (M-1); // -1 since the last point of an outer trajectory is uninteresting
   int threads_per_block = 1024;
 
   printf("Simulating nested Monte Carlo with\n \tnumber of outer trajectories: %d\n\tnumber of inner trajectories: %d\n", 
@@ -461,9 +460,10 @@ int main()
 	
 	parameters();
 
-	cudaEventCreate(&start);			// GPU timer instructions
-	cudaEventCreate(&stop);				// GPU timer instructions
-	cudaEventRecord(start,0);			// GPU timer instructions
+  // GPU timer instructions
+	cudaEventCreate(&start);			
+	cudaEventCreate(&stop);			
+	cudaEventRecord(start,0);		
 
 
   // calculate outer trajectories
@@ -471,17 +471,21 @@ int main()
 	MCouter_k<<<Nblocks,threads_per_block,2*threads_per_block*sizeof(float)>>>
     (P1, P2, x_0, dt, B, K, leng, M, Nouter, CMRG, time, price, i_t);
 
-  for(int i = 0; i < M; i++){
-    //MCouter_k<<<Nblocks,threads_per_block,2*threads_per_block*sizeof(float)>>>
-     // (P1, P2, dt, B, K, leng, M, Ninner, CMRG, i+1, time, float* price, int* i_t, float* sum, float* sum2)
+  // calculate inner trajectories
+  Nblocks = (Ninner+threads_per_block-1)/threads_per_block; // ceiling function
+  dim3 dim_blocks(Nouter, Nblocks);
+  for(int i = 0; i < M-1; i++){
+    MCinner_k<<<dim_blocks, threads_per_block, 2*threads_per_block*sizeof(float)>>>
+      (P1, P2, dt, B, K, leng, M, Ninner, CMRG, i+1, time+i*Nouter, price+i*Nouter, i_t+i*Nouter, sum+i*Nouter, sum2+i*Nouter);
   }
 
-	cudaEventRecord(stop,0);			// GPU timer instructions
-	cudaEventSynchronize(stop);			// GPU timer instructions
-	cudaEventElapsedTime(&Tim,			// GPU timer instructions
-			 start, stop);				// GPU timer instructions
-	cudaEventDestroy(start);			// GPU timer instructions
-	cudaEventDestroy(stop);				// GPU timer instructions
+  // GPU timer instructions
+	cudaEventRecord(stop,0);			
+	cudaEventSynchronize(stop);			
+	cudaEventElapsedTime(&Tim,			
+			 start, stop);				
+	cudaEventDestroy(start);			
+	cudaEventDestroy(stop);				
 
 	cudaMemcpy(price_c, price, sizeof(float) * Ndiscret,cudaMemcpyDeviceToHost);
 	cudaMemcpy(i_t_c, i_t, sizeof(int) * Ndiscret, cudaMemcpyDeviceToHost);
@@ -495,20 +499,17 @@ int main()
 
 	FILE* fp;
 	fp = fopen("price_c.txt", "w");
-	// check for error here
 	for (unsigned i = 0; i < Ndiscret; i++) {
 		fprintf(fp, "%d,%f\n", i, price_c[i]);
 
 	}
 	fclose(fp);
 	fp = fopen("time_c.txt", "w");
-	// check for error here
 	for (unsigned i = 0; i < Ndiscret; i++) {
 		fprintf(fp, "%d,%f\n", i, time_c[i]);}
 	fclose(fp);
 
 	fp = fopen("i_t_c.txt", "w");
-	// check for error here
 	for (unsigned i = 0; i < Ndiscret; i++) {
 		fprintf(fp, "%d,%d\n", i, i_t_c[i]);}
 	fclose(fp);
