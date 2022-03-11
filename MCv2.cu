@@ -448,11 +448,12 @@ __global__ void MCreg_k(int P1, int P2, float dt,
 
     CMRG_set_d(&a0, &a1, &a2, &a3, &a4, &a5, pt_cmrg[0][idx_outer][idx_inner]);
 
+	//Fehler: Discount rate -> Doublecheck this !
     if(blockIdx.y == 0){
-      x1[idx_outer] = expf(-rt_int(0.0f, t, 0, q))*fmaxf(0.0f, Sk-K)*((P<=P2)&&(P>=P1));
+      x1[idx_outer] = expf(-rt_int(dt*dt*L*(k_start-1), t, 0, q))*fmaxf(0.0f, Sk-K)*((P<=P2)&&(P>=P1));
     }
     else{
-      x2[idx_outer] = expf(-rt_int(0.0f, t, 0, q))*fmaxf(0.0f, Sk-K)*((P<=P2)&&(P>=P1));
+      x2[idx_outer] = expf(-rt_int(dt*dt*L*(k_start-1), t, 0, q))*fmaxf(0.0f, Sk-K)*((P<=P2)&&(P>=P1));
     }
   }
   
