@@ -427,8 +427,8 @@ int main()
 	int leng = Nt/M;
 	float Tim;							// GPU timer instructions
 	cudaEvent_t start, stop;			// GPU timer instructions
-  int Nouter = 2048; //2^15
-  int Ninner = 2048; // 2^9
+  int Nouter = 8192; //2^15
+  int Ninner = 4096; // 2^9
   int Ndiscret = Nouter * (M-1); // -1 since the last point of an outer trajectory is uninteresting
   int threads_per_block = 1024;
 
@@ -490,6 +490,8 @@ int main()
 	cudaMemcpy(price_c, price, sizeof(float) * Ndiscret,cudaMemcpyDeviceToHost);
 	cudaMemcpy(i_t_c, i_t, sizeof(int) * Ndiscret, cudaMemcpyDeviceToHost);
 	cudaMemcpy(time_c, time, sizeof(int) * Ndiscret, cudaMemcpyDeviceToHost);
+  cudaMemcpy(sum_c, sum, sizeof(float) * Ndiscret, cudaMemcpyDeviceToHost);
+  cudaMemcpy(sum2_c, sum2, sizeof(float) * Ndiscret, cudaMemcpyDeviceToHost);
 
   cudaFree(price);
 	cudaFree(i_t);
@@ -512,6 +514,16 @@ int main()
 	fp = fopen("i_t_c.txt", "w");
 	for (unsigned i = 0; i < Ndiscret; i++) {
 		fprintf(fp, "%d,%d\n", i, i_t_c[i]);}
+	fclose(fp);
+
+  fp = fopen("sum_c.txt", "w");
+	for (unsigned i = 0; i < Ndiscret; i++) {
+		fprintf(fp, "%d,%f\n", i, sum_c[i]);}
+	fclose(fp);
+
+  fp = fopen("sum2_c.txt", "w");
+	for (unsigned i = 0; i < Ndiscret; i++) {
+		fprintf(fp, "%d,%f\n", i, sum2_c[i]);}
 	fclose(fp);
 
   printf("All files generated.\n");

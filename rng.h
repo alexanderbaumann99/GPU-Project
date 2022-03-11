@@ -11,8 +11,8 @@ the name of the author above.
 
 using namespace std;
 
-#define Mtraj (32768)
-#define Mtraj_inner (1024)
+#define Mtraj (8192)
+#define Mtraj_inner (4096)
 #define MoPI (3.1415927f)
 
 ////////////////////////////////////////////////////////////////
