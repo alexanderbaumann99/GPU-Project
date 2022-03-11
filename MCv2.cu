@@ -412,6 +412,52 @@ __global__ void MCinner_k(int P1, int P2, float dt,
   
 }
 
+__global__ void MCreg_k(int P1, int P2, float dt, 
+					 float B, float K, int L, int M,
+					 int Nouter, TabSeedCMRG_t *pt_cmrg, int k_start,
+					 float* time, float* price, int* i_t, float* x1, float* x2){
+
+  // blockIdx.x -> index outer trajectory
+  int idx_outer = threadIdx.x + blockDim.x * blockIdx.x;
+  // blockIdx.y -> index inner trajectory
+  int idx_inner = blockIdx.y;
+
+  int a0, a1, a2, a3, a4, a5, k, i, q, P;
+  float g0, g1, Sk, Skp1, t, v;
+
+  if(idx_outer < Nouter){
+
+    // is it quicker to make this access to global memory in a batch once per block?
+    Sk = price[idx_outer];
+    P = i_t[idx_outer];
+
+    CMRG_get_d(&a0, &a1, &a2, &a3, &a4, &a5, pt_cmrg[0][idx_outer][idx_inner]);
+
+    for (k=k_start; k<M; k++){
+      for (i=1; i<=L; i++){
+        t = dt*dt*(i+L*k);
+        q = timeIdx(t);
+        vol_d(Sk, price[idx_outer], t, &v, q);
+        CMRG_d(&a0, &a1, &a2, &a3, &a4, &a5, &g0, &g1, 2);
+        BoxMuller_d(&g0, &g1);
+        Euler_d(&Skp1, Sk, rg[q], v, dt, g0);
+        Sk = Skp1;  
+      }
+      P += (Sk<B);
+    }
+
+    CMRG_set_d(&a0, &a1, &a2, &a3, &a4, &a5, pt_cmrg[0][idx_outer][idx_inner]);
+
+    if(blockIdx.y == 0){
+      x1[idx_outer] = expf(-rt_int(0.0f, t, 0, q))*fmaxf(0.0f, Sk-K)*((P<=P2)&&(P>=P1));
+    }
+    else{
+      x2[idx_outer] = expf(-rt_int(0.0f, t, 0, q))*fmaxf(0.0f, Sk-K)*((P<=P2)&&(P>=P1));
+    }
+  }
+  
+}
+
 
 int main()
 {
@@ -441,17 +487,24 @@ int main()
 	int* i_t;
 	float* sum;
 	float* sum2;
+  float* x1;
+  float* x2;
 	float* time_c = (float*)malloc(sizeof(float) * Ndiscret);
 	float* price_c = (float*)malloc(sizeof(float) * Ndiscret);
 	int* i_t_c = (int*)malloc(sizeof(int) * Ndiscret);
 	float* sum_c = (float*)malloc(sizeof(float) * Ndiscret);
 	float* sum2_c = (float*)malloc(sizeof(float) * Ndiscret);
+  float* x1_c = (float*)malloc(sizeof(float) * Ndiscret);
+  float* x2_c = (float*)malloc(sizeof(float) * Ndiscret);
 
 	cudaMalloc(&time, sizeof(float) * Ndiscret);
 	cudaMalloc(&price, sizeof(float) * Ndiscret);
 	cudaMalloc(&i_t, sizeof(int) * Ndiscret);
 	cudaMalloc(&sum, sizeof(float) * Ndiscret);
 	cudaMalloc(&sum2, sizeof(float) * Ndiscret);
+  cudaMalloc(&x1, sizeof(float) * Ndiscret);
+  cudaMalloc(&x2, sizeof(float) * Ndiscret);
+
 	
 	cudaMemset(sum, 0.0f, sizeof(float) * Ndiscret);
 	cudaMemset(sum2, 0.0f, sizeof(float) * Ndiscret);
@@ -486,19 +539,30 @@ int main()
 	cudaEventElapsedTime(&Tim,			
 			 start, stop);				
 	cudaEventDestroy(start);			
-	cudaEventDestroy(stop);				
+	cudaEventDestroy(stop);		
+
+  // simulate trajectories for regression
+  Nblocks = (Nouter+threads_per_block-1)/threads_per_block; // ceiling function
+  dim3 dim_blocks_reg(Nblocks, 2);
+  for(int i = 0; i < M-1; i++){
+    MCreg_k<<<dim_blocks_reg, threads_per_block>>>
+      (P1, P2, dt, B, K, leng, M, Nouter, CMRG, i+1, time+i*Nouter, price+i*Nouter, i_t+i*Nouter, x1+i*Nouter, x2+i*Nouter);
+  }
 
 	cudaMemcpy(price_c, price, sizeof(float) * Ndiscret,cudaMemcpyDeviceToHost);
 	cudaMemcpy(i_t_c, i_t, sizeof(int) * Ndiscret, cudaMemcpyDeviceToHost);
 	cudaMemcpy(time_c, time, sizeof(int) * Ndiscret, cudaMemcpyDeviceToHost);
   cudaMemcpy(sum_c, sum, sizeof(float) * Ndiscret, cudaMemcpyDeviceToHost);
   cudaMemcpy(sum2_c, sum2, sizeof(float) * Ndiscret, cudaMemcpyDeviceToHost);
+  cudaMemcpy(x1_c, x1, sizeof(float) * Ndiscret, cudaMemcpyDeviceToHost);
+  cudaMemcpy(x2_c, x2, sizeof(float) * Ndiscret, cudaMemcpyDeviceToHost);
 
   cudaFree(price);
 	cudaFree(i_t);
 	cudaFree(time);
 	cudaFree(sum);
-	cudaFree(sum2);
+	cudaFree(x1);
+  cudaFree(x2);
 
 	FILE* fp;
 	fp = fopen("price_c.txt", "w");
@@ -527,14 +591,26 @@ int main()
 		fprintf(fp, "%d,%f\n", i, sum2_c[i]);}
 	fclose(fp);
 
+  fp = fopen("x1_c.txt", "w");
+	for (unsigned i = 0; i < Ndiscret; i++) {
+		fprintf(fp, "%d,%f\n", i, x1_c[i]);}
+	fclose(fp);
+
+  fp = fopen("x2_c.txt", "w");
+	for (unsigned i = 0; i < Ndiscret; i++) {
+		fprintf(fp, "%d,%f\n", i, x2_c[i]);}
+	fclose(fp);
+
   printf("All files generated.\n");
-	printf("Execution time %f ms\n", Tim);
+	printf("Execution time of nested MC %f ms\n", Tim);
 
   free(price_c);
   free(time_c);
   free(i_t_c);
   free(sum_c);
   free(sum2_c);
+  free(x1_c);
+  free(x2_c);
 
 	FreeCMRG();
 	FreeVar();
