@@ -390,7 +390,10 @@ __global__ void MCinner_k(int P1, int P2, float dt,
 
     // Reduction phase
 	//Fehler: Discount rate -> Doublecheck this !
-    H[threadIdx.x] = expf(-rt_int(dt*dt*L*(k_start-1), t, 0, q))*fmaxf(0.0f, Sk-K)*((P<=P2)&&(P>=P1))/Ninner;
+	// Ich denke, es soll bei k_start anfangen
+	// wenn zb. k_start = M-1 dann soll die Differenz
+	// T-t genau 1 sein
+    H[threadIdx.x] = expf(-rt_int(dt*dt*L*k_start, t, 0, q))*fmaxf(0.0f, Sk-K)*((P<=P2)&&(P>=P1))/Ninner;
     H[threadIdx.x + blockDim.x] = Ninner*H[threadIdx.x]*H[threadIdx.x];
     __syncthreads();
 
@@ -450,10 +453,10 @@ __global__ void MCreg_k(int P1, int P2, float dt,
 
 	//Fehler: Discount rate -> Doublecheck this !
     if(blockIdx.y == 0){
-      x1[idx_outer] = expf(-rt_int(dt*dt*L*(k_start-1), t, 0, q))*fmaxf(0.0f, Sk-K)*((P<=P2)&&(P>=P1));
+      x1[idx_outer] = expf(-rt_int(dt*dt*L*k_start, t, 0, q))*fmaxf(0.0f, Sk-K)*((P<=P2)&&(P>=P1));
     }
     else{
-      x2[idx_outer] = expf(-rt_int(dt*dt*L*(k_start-1), t, 0, q))*fmaxf(0.0f, Sk-K)*((P<=P2)&&(P>=P1));
+      x2[idx_outer] = expf(-rt_int(dt*dt*L*k_start, t, 0, q))*fmaxf(0.0f, Sk-K)*((P<=P2)&&(P>=P1));
     }
   }
   

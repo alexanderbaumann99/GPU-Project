@@ -17,6 +17,6 @@ sum2 = np.loadtxt(join(file_dir, 'sum2_c.txt'), delimiter=',', usecols=1)
 variance = sum2 - np.square(sum)
 
 ### visualize
-plt.scatter(time, price, c=variance, s=1, cmap='seismic')
+plt.scatter(time, price, c=sum, s=1, cmap='seismic')
 plt.colorbar()
 plt.show()
