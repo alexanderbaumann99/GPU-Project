@@ -85,7 +85,7 @@ model = nn.Linear(2,1).to(device)
 
 #Define hyper-parameters
 batch_size = 128
-epochs = 1
+epochs = 20
 lr = 0.001
 optimizer = torch.optim.Adam(model.parameters(), lr)
 
