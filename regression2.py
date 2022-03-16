@@ -79,8 +79,8 @@ sum = torch.FloatTensor(np.loadtxt(join(file_dir, 'sum_c.txt'), delimiter=',', u
 batch_size = 128
 epochs = 20
 lr = 0.001
-hidden_dim=1024
-device=torch.device('cuda')
+hidden_dim=512
+device=torch.device('cpu')
 model = nn.Sequential(  nn.Linear(2,hidden_dim),
                         nn.Linear(hidden_dim,1)).to(device)
 
@@ -94,7 +94,7 @@ train_loader=torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuff
 test_loader=torch.utils.data.DataLoader(test_set, batch_size=len(test_set), shuffle=False)
 
 optimizer = torch.optim.Adam(model.parameters(), lr)
-model.load_state_dict(torch.load("regression_weights.pth"))
+#model.load_state_dict(torch.load("regression_weights.pth"))
 print('starting training...')
 train(model, epochs, train_loader, optimizer,device)
 print('training done.')
