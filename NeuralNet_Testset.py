@@ -8,7 +8,6 @@ import time as t
 import math
 from torch.utils.data import random_split
 
-
 class NeuralNet(nn.Module):
     def __init__(self, dim_in, dim_out, dim_h, activation):
         super().__init__()
@@ -24,16 +23,18 @@ class NeuralNet(nn.Module):
     def forward(self, x):
         return self.model(x.float())
 
-def train(model,epochs,lossFun,train_loader,optimizer,device):
+def train(model, epochs, train_loader, optimizer,device):
     start_time=t.time()
     for epoch in range(epochs):
         Mloss = 0
-        for batch, target in train_loader:
-            batch=batch.to(device).view(-1,3)
-            target=target.to(device).view(-1)
-            
+        for batch, target,_ in train_loader:
+            batch=batch.to(device)
+            target=target.to(device).view(-1,2)
+            f1=target[:,0]
+            f2=target[:,1]
+
             pred=model(batch).view(-1)
-            loss = lossFun(pred,target)
+            loss = torch.mean(pred**2-f1*pred-f2*pred+f1*f2)
 
             optimizer.zero_grad()
             loss.backward()
@@ -48,23 +49,27 @@ def train(model,epochs,lossFun,train_loader,optimizer,device):
 def eval(model, test_loader,device):
     model=model.to(device)
     with torch.no_grad():
-        for batch,target in test_loader:
+        Mloss = 0
+        for batch,_,target in test_loader:
             batch=batch.to(device).view(-1,3)
-            target=target.to(device).view(-1)
-            pred=model(batch).view(-1)
-            loss = (pred-target).numpy()
-                        
+            
+            pred=model(batch).view(-1).detach().numpy()
+            target=target.cpu().numpy()
+
+            loss = pred-target
+
             _,_,_ = plt.hist(loss, 100, facecolor='g', alpha=0.75)
             plt.grid(True)
             plt.yscale('log')
             plt.show()
+            plt.savefig("nn_histo.png")
 
-            loss=np.abs(loss)
-            loss=np.mean(loss)
-            
-        print(f'Test loss {loss}')
-    
-    return loss
+            loss=np.mean(np.abs(loss))
+
+            Mloss += loss
+        print(f'Test loss: {Mloss/len(test_loader)}')
+
+    return Mloss
         
 #file_dir = "/kaggle/input/gpu-neuralnet/nestedMC_data2"  
 file_dir = join('./', 'nestedMC_data2') # does it work on windows?
@@ -83,7 +88,7 @@ x2=torch.FloatTensor(x2)
 time=torch.FloatTensor(time)
 
 batch_size = 128
-epochs = 30
+epochs = 20
 lr = 0.001
 lossFun = nn.MSELoss()
 device=torch.device('cuda')
@@ -92,15 +97,15 @@ model = NeuralNet(3, 1, [128,64,32], nn.LeakyReLU()).to(device)
 
 x = torch.stack([price,i_t,time], dim=1).view(-1,3)
 y=torch.stack((f1,f2),dim=1).view(-1,2)
-dataset = torch.utils.data.TensorDataset(x,sum)
+dataset = torch.utils.data.TensorDataset(x,y,sum)
 train_set,test_set=random_split(dataset,[len(dataset)-len(dataset)//7,len(dataset)//7])
 train_loader=torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True)
 test_loader=torch.utils.data.DataLoader(test_set, batch_size=len(test_set), shuffle=False)
 print("Length of train set: %d\nLength of test set:  %d" %(len(train_set),len(test_set)))
 optimizer = torch.optim.Adam(model.parameters(), lr)
-#model.load_state_dict(torch.load("NN_weights.pth"))
+model.load_state_dict(torch.load("NN_weights.pth"))
 print('starting training...')
-train(model, epochs, lossFun, train_loader, optimizer,device)
+#train(model, epochs, train_loader, optimizer,device)
 torch.save(model.state_dict(),"NN_weights.pth")
 print('training done.')
 print('Evaluation...')
