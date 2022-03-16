@@ -1,0 +1,75 @@
+11.6s 1 /kaggle/input/gpu-neuralnet/NeuralNet_final.py
+11.6s 2 /kaggle/input/gpu-neuralnet/auxiliary.py
+11.6s 3 /kaggle/input/gpu-neuralnet/regression_final.py
+11.6s 4 /kaggle/input/gpu-neuralnet/nestedMC_data2/i_t_c.txt
+11.6s 5 /kaggle/input/gpu-neuralnet/nestedMC_data2/detail.txt
+11.6s 6 /kaggle/input/gpu-neuralnet/nestedMC_data2/x1_c.txt
+11.6s 7 /kaggle/input/gpu-neuralnet/nestedMC_data2/sum2_c.txt
+11.6s 8 /kaggle/input/gpu-neuralnet/nestedMC_data2/price_c.txt
+11.6s 9 /kaggle/input/gpu-neuralnet/nestedMC_data2/sum_c.txt
+11.6s 10 /kaggle/input/gpu-neuralnet/nestedMC_data2/time_c.txt
+11.6s 11 /kaggle/input/gpu-neuralnet/nestedMC_data2/x2_c.txt
+11.6s 12 /opt/conda/lib/python3.7/site-packages/papermill/iorw.py:50: FutureWarning: pyarrow.HadoopFileSystem is deprecated as of 2.0.0, please use pyarrow.fs.HadoopFileSystem instead.
+11.6s 13 from pyarrow import HadoopFileSystem
+40.6s 14 Length of train set: 695150
+40.6s 15 Length of test set:  115858
+40.6s 16 starting training...
+55.6s 17 [1/20] loss 61.184024810791016
+70.5s 18 [2/20] loss 52.225914001464844
+85.1s 19 [3/20] loss 50.39854431152344
+99.3s 20 [4/20] loss 48.77079772949219
+114.0s 21 [5/20] loss 47.337188720703125
+128.1s 22 [6/20] loss 46.08745193481445
+142.7s 23 [7/20] loss 44.99093246459961
+157.4s 24 [8/20] loss 44.04047393798828
+172.2s 25 [9/20] loss 43.19670486450195
+186.4s 26 [10/20] loss 42.47449493408203
+201.2s 27 [11/20] loss 41.84787368774414
+215.5s 28 [12/20] loss 41.320655822753906
+229.7s 29 [13/20] loss 40.86453628540039
+244.3s 30 [14/20] loss 40.4682731628418
+258.9s 31 [15/20] loss 40.13231658935547
+274.0s 32 [16/20] loss 39.836181640625
+288.5s 33 [17/20] loss 39.592838287353516
+303.5s 34 [18/20] loss 39.39410400390625
+317.6s 35 [19/20] loss 39.20951843261719
+332.2s 36 [20/20] loss 39.05751037597656
+332.2s 37 Training time:  291.5833592414856 s
+332.2s 38 training done.
+332.2s 39 Evaluation...
+338.1s 40 Test loss: 3.7025818824768066
+365.5s 41 Length of train set: 695150
+365.5s 42 Length of test set:  115858
+365.5s 43 starting training...
+383.3s 44 [1/20] loss 15.542464256286621
+401.0s 45 [2/20] loss 5.839548110961914
+418.2s 46 [3/20] loss 4.869588851928711
+436.1s 47 [4/20] loss 4.284305572509766
+453.2s 48 [5/20] loss 3.990236759185791
+471.1s 49 [6/20] loss 3.6311826705932617
+488.6s 50 [7/20] loss 3.29941463470459
+506.2s 51 [8/20] loss 2.9886820316314697
+524.0s 52 [9/20] loss 2.769751787185669
+541.9s 53 [10/20] loss 2.4747447967529297
+559.4s 54 [11/20] loss 2.367896318435669
+576.9s 55 [12/20] loss 2.250471830368042
+594.5s 56 [13/20] loss 2.047783136367798
+611.7s 57 [14/20] loss 2.046860694885254
+629.3s 58 [15/20] loss 2.009666681289673
+646.5s 59 [16/20] loss 1.8994407653808594
+664.4s 60 [17/20] loss 1.8584787845611572
+681.4s 61 [18/20] loss 1.7133466005325317
+699.3s 62 [19/20] loss 1.6947920322418213
+717.0s 63 [20/20] loss 1.6136969327926636
+717.0s 64 Training time:  351.4354965686798 s
+717.0s 65 training done.
+717.0s 66 Evaluation...
+723.6s 67 Test loss: 0.30077603459358215
+726.9s 68 /opt/conda/lib/python3.7/site-packages/traitlets/traitlets.py:2567: FutureWarning: --Exporter.preprocessors=["remove_papermill_header.RemovePapermillHeader"] for containers is deprecated in traitlets 5.0. You can pass `--Exporter.preprocessors item` ... multiple times to add items to a list.
+726.9s 69 FutureWarning,
+726.9s 70 [NbConvertApp] Converting notebook __notebook__.ipynb to notebook
+727.0s 71 [NbConvertApp] Writing 7321 bytes to __notebook__.ipynb
+729.3s 72 /opt/conda/lib/python3.7/site-packages/traitlets/traitlets.py:2567: FutureWarning: --Exporter.preprocessors=["nbconvert.preprocessors.ExtractOutputPreprocessor"] for containers is deprecated in traitlets 5.0. You can pass `--Exporter.preprocessors item` ... multiple times to add items to a list.
+729.3s 73 FutureWarning,
+729.3s 74 [NbConvertApp] Converting notebook __notebook__.ipynb to html
+729.7s 75 [NbConvertApp] Writing 278209 bytes to __results__.html

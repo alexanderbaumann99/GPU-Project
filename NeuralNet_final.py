@@ -58,19 +58,20 @@ def eval(model, test_loader,device):
 
             loss = np.abs(pred-nested_val)
 
+            plt.figure()
             _,_,_ = plt.hist(loss, 100, facecolor='g', alpha=0.75)
             plt.grid(True)
             plt.yscale('log')
             plt.show()
             plt.savefig("nn_histo.png")
 
-            loss=np.mean(loss)
-
+            plt.figure()
             plt.scatter(batch[:,2], batch[:,0], c=pred, s=1, cmap='seismic')
             plt.colorbar()
             plt.show()
             plt.savefig("nn_traj.png")
 
+            loss=np.mean(loss)
         print(f'Test loss: {loss}')
 
    

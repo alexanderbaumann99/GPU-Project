@@ -46,12 +46,14 @@ def eval(model, test_loader,device):
             pred_f=compute_Fvalue(pred,time_batch)
             loss = np.abs(pred_f-nested_val)
 
+            plt.figure()
             _,_,_ = plt.hist(loss, 100, facecolor='g', alpha=0.75)
             plt.grid(True)
             plt.yscale('log')
             plt.show()
             plt.savefig("reg_histo.png")
 
+            plt.figure()
             plt.scatter(time_batch, batch[:,0], c=pred_f, s=1, cmap='seismic')
             plt.colorbar()
             plt.show()
@@ -102,7 +104,7 @@ print("Length of train set: %d\nLength of test set:  %d" %(len(train_set),len(te
 #Training and evaluation
 print('starting training...')
 train(model, epochs, train_loader, optimizer,device)
-torch.save(model.state_dict(),"NN_weights.pth")
+torch.save(model.state_dict(),"reg_weights.pth")
 print('training done.')
 print('Evaluation...')
 device=torch.device('cpu')
