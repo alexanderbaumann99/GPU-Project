@@ -1,16 +1,5 @@
-11.6s 1 /kaggle/input/gpu-neuralnet/NeuralNet_final.py
-11.6s 2 /kaggle/input/gpu-neuralnet/auxiliary.py
-11.6s 3 /kaggle/input/gpu-neuralnet/regression_final.py
-11.6s 4 /kaggle/input/gpu-neuralnet/nestedMC_data2/i_t_c.txt
-11.6s 5 /kaggle/input/gpu-neuralnet/nestedMC_data2/detail.txt
-11.6s 6 /kaggle/input/gpu-neuralnet/nestedMC_data2/x1_c.txt
-11.6s 7 /kaggle/input/gpu-neuralnet/nestedMC_data2/sum2_c.txt
-11.6s 8 /kaggle/input/gpu-neuralnet/nestedMC_data2/price_c.txt
-11.6s 9 /kaggle/input/gpu-neuralnet/nestedMC_data2/sum_c.txt
-11.6s 10 /kaggle/input/gpu-neuralnet/nestedMC_data2/time_c.txt
-11.6s 11 /kaggle/input/gpu-neuralnet/nestedMC_data2/x2_c.txt
-11.6s 12 /opt/conda/lib/python3.7/site-packages/papermill/iorw.py:50: FutureWarning: pyarrow.HadoopFileSystem is deprecated as of 2.0.0, please use pyarrow.fs.HadoopFileSystem instead.
-11.6s 13 from pyarrow import HadoopFileSystem
+# Regression
+
 40.6s 14 Length of train set: 695150
 40.6s 15 Length of test set:  115858
 40.6s 16 starting training...
@@ -38,6 +27,11 @@
 332.2s 38 training done.
 332.2s 39 Evaluation...
 338.1s 40 Test loss: 3.7025818824768066
+
+
+
+# Neural Network
+
 365.5s 41 Length of train set: 695150
 365.5s 42 Length of test set:  115858
 365.5s 43 starting training...
@@ -65,11 +59,3 @@
 717.0s 65 training done.
 717.0s 66 Evaluation...
 723.6s 67 Test loss: 0.30077603459358215
-726.9s 68 /opt/conda/lib/python3.7/site-packages/traitlets/traitlets.py:2567: FutureWarning: --Exporter.preprocessors=["remove_papermill_header.RemovePapermillHeader"] for containers is deprecated in traitlets 5.0. You can pass `--Exporter.preprocessors item` ... multiple times to add items to a list.
-726.9s 69 FutureWarning,
-726.9s 70 [NbConvertApp] Converting notebook __notebook__.ipynb to notebook
-727.0s 71 [NbConvertApp] Writing 7321 bytes to __notebook__.ipynb
-729.3s 72 /opt/conda/lib/python3.7/site-packages/traitlets/traitlets.py:2567: FutureWarning: --Exporter.preprocessors=["nbconvert.preprocessors.ExtractOutputPreprocessor"] for containers is deprecated in traitlets 5.0. You can pass `--Exporter.preprocessors item` ... multiple times to add items to a list.
-729.3s 73 FutureWarning,
-729.3s 74 [NbConvertApp] Converting notebook __notebook__.ipynb to html
-729.7s 75 [NbConvertApp] Writing 278209 bytes to __results__.html
