@@ -516,12 +516,7 @@ int main()
 	VarMalloc();
 	PostInitDataCMRG();
 	
-	parameters();
-
-  // GPU timer instructions
-	cudaEventCreate(&start);			
-	cudaEventCreate(&stop);			
-	cudaEventRecord(start,0);		
+	parameters();		
 
 
   // calculate outer trajectories
@@ -529,6 +524,11 @@ int main()
 	MCouter_k<<<Nblocks,threads_per_block,2*threads_per_block*sizeof(float)>>>
     (P1, P2, x_0, dt, B, K, leng, M, Nouter, CMRG, time, price, i_t);
 
+	// GPU timer instructions
+	cudaEventCreate(&start);			
+	cudaEventCreate(&stop);			
+	cudaEventRecord(start,0);
+	
   // calculate inner trajectories
   Nblocks = (Ninner+threads_per_block-1)/threads_per_block; // ceiling function
   dim3 dim_blocks(Nouter, Nblocks);
