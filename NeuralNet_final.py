@@ -5,8 +5,8 @@ from os.path import join
 from auxiliary import compute_Fvalue
 import matplotlib.pyplot as plt
 import time as t
-import math
 from torch.utils.data import random_split
+
 
 class NeuralNet(nn.Module):
     def __init__(self, dim_in, dim_out, dim_h, activation):
@@ -27,11 +27,11 @@ def train(model, epochs, train_loader, optimizer,device):
     start_time=t.time()
     for epoch in range(epochs):
         Mloss = 0
-        for batch, target,_ in train_loader:
+        for batch, mc_vals,_ in train_loader:
             batch=batch.to(device)
-            target=target.to(device).view(-1,2)
-            f1=target[:,0]
-            f2=target[:,1]
+            mc_vals=mc_vals.to(device).view(-1,2)
+            f1=mc_vals[:,0]
+            f2=mc_vals[:,1]
 
             pred=model(batch).view(-1)
             loss = torch.mean(pred**2-f1*pred-f2*pred+f1*f2)
@@ -46,17 +46,17 @@ def train(model, epochs, train_loader, optimizer,device):
     exe_time=end_time-start_time
     print("Training time: ",exe_time,"s")
 
+
 def eval(model, test_loader,device):
     model=model.to(device)
     with torch.no_grad():
-        Mloss = 0
-        for batch,_,target in test_loader:
-            batch=batch.to(device).view(-1,3)
-            
-            pred=model(batch).view(-1).detach().numpy()
-            target=target.cpu().numpy()
+        for batch,_,nested_val in test_loader:
 
-            loss = pred-target
+            batch=batch.view(-1,3)
+            pred=model(batch).view(-1).numpy()
+            nested_val=nested_val.numpy()
+
+            loss = np.abs(pred-nested_val)
 
             _,_,_ = plt.hist(loss, 100, facecolor='g', alpha=0.75)
             plt.grid(True)
@@ -64,13 +64,18 @@ def eval(model, test_loader,device):
             plt.show()
             plt.savefig("nn_histo.png")
 
-            loss=np.mean(np.abs(loss))
+            loss=np.mean(loss)
 
-            Mloss += loss
-        print(f'Test loss: {Mloss/len(test_loader)}')
+            plt.scatter(batch[:,2], batch[:,0], c=pred, s=1, cmap='seismic')
+            plt.colorbar()
+            plt.show()
+            plt.savefig("nn_traj.png")
 
-    return Mloss
+        print(f'Test loss: {loss}')
+
+   
         
+#Load data from files
 #file_dir = "/kaggle/input/gpu-neuralnet/nestedMC_data2"  
 file_dir = join('./', 'nestedMC_data2') # does it work on windows?
 price = torch.FloatTensor(np.loadtxt(join(file_dir, 'price_c.txt'), delimiter=',', usecols=1))
@@ -87,27 +92,32 @@ x1=torch.FloatTensor(x1)
 x2=torch.FloatTensor(x2)
 time=torch.FloatTensor(time)
 
-batch_size = 128
-epochs = 20
-lr = 0.001
-lossFun = nn.MSELoss()
+#Define Neural Network
 device=torch.device('cuda')
-
 model = NeuralNet(3, 1, [128,64,32], nn.LeakyReLU()).to(device)
 
+#Define hyper-parameters
+batch_size = 128
+epochs = 1
+lr = 0.001
+optimizer = torch.optim.Adam(model.parameters(), lr)
+lossFun = nn.MSELoss()
+
+#Prepare DataLoaders
 x = torch.stack([price,i_t,time], dim=1).view(-1,3)
-y=torch.stack((f1,f2),dim=1).view(-1,2)
+y = torch.stack((f1,f2),dim=1).view(-1,2)
 dataset = torch.utils.data.TensorDataset(x,y,sum)
-train_set,test_set=random_split(dataset,[len(dataset)-len(dataset)//7,len(dataset)//7])
+train_set,test_set = random_split(dataset,[len(dataset)-len(dataset)//7,len(dataset)//7])
 train_loader=torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True)
 test_loader=torch.utils.data.DataLoader(test_set, batch_size=len(test_set), shuffle=False)
 print("Length of train set: %d\nLength of test set:  %d" %(len(train_set),len(test_set)))
-optimizer = torch.optim.Adam(model.parameters(), lr)
-model.load_state_dict(torch.load("NN_weights.pth"))
+
+
+#Training and evaluation
 print('starting training...')
-#train(model, epochs, train_loader, optimizer,device)
+train(model, epochs, train_loader, optimizer,device)
 torch.save(model.state_dict(),"NN_weights.pth")
 print('training done.')
 print('Evaluation...')
 device=torch.device('cpu')
-_=eval(model,test_loader,device)
+eval(model,test_loader,device)
