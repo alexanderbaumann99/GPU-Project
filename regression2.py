@@ -44,14 +44,16 @@ def eval(model, test_loader,device):
             pred_f=compute_Fvalue(pred,time_batch)
 
             target=target.cpu().numpy()
-            loss = np.abs(pred_f-target)
+            f1 = target[:,0]
+            f2 = target[:,1]
+            loss = np.mean(pred_f**2-f1*pred_f-f2*pred_f+f1*f2)
 
-            _,_,_ = plt.hist(loss, 100, facecolor='g', alpha=0.75)
-            plt.grid(True)
-            plt.yscale('log')
-            plt.show()
+            #_,_,_ = plt.hist(loss, 100, facecolor='g', alpha=0.75)
+            #plt.grid(True)
+            #plt.yscale('log')
+            #plt.show()
 
-            loss=np.mean(loss)
+            #loss=np.mean(loss)
 
             Mloss += loss
         print(f'Test loss: {Mloss/len(test_loader)}')
@@ -81,13 +83,13 @@ epochs = 20
 lr = 0.001
 hidden_dim=512
 device=torch.device('cpu')
-model = nn.Sequential(  nn.Linear(2,hidden_dim),
-                        nn.Linear(hidden_dim,1)).to(device)
+model = nn.Sequential(nn.Linear(2,1)).to(device)
 
 
 x = torch.stack([price,i_t,time], dim=1).view(-1,3)
 y = torch.stack((x1,x2),dim=1).view(-1,2)
-dataset = torch.utils.data.TensorDataset(x,y,sum)
+f = torch.stack((f1, f2), dim=1)
+dataset = torch.utils.data.TensorDataset(x,y,f)
 split=0.75
 train_set,test_set=random_split(dataset,[len(dataset)-len(dataset)//4,len(dataset)//4])
 train_loader=torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True)
