@@ -11,6 +11,7 @@ from torch.utils.data import random_split
 
 def train(model, epochs, train_loader, optimizer,device):
     start_time=t.time()
+    loss_=np.zeros(epochs)
     for epoch in range(epochs):
         Mloss = 0
         for batch, mc_vals,_,_ in train_loader:
@@ -27,24 +28,38 @@ def train(model, epochs, train_loader, optimizer,device):
             optimizer.step()
             Mloss += loss
         print(f'[{epoch+1}/{epochs}] loss {Mloss/len(train_loader)}')
+        loss_[epoch] = Mloss/len(train_loader)
 
     end_time=t.time()
     exe_time=end_time-start_time
     print("Training time: ",exe_time,"s")
+    plt.plot(range(epochs), loss_)
+    plt.xlabel('Epoch')
+    plt.ylabel('Mean squared error')
+    plt.yscale('log')
+    plt.plot()
 
 
 def eval(model, test_loader,device):
     model=model.to(device)
     with torch.no_grad():
-        for batch,_,time_batch,nested_val in test_loader:
+        inf_time=0
+        for batch,mc_vals,time_batch,nested_val in test_loader:
             
             time_batch=time_batch.numpy()
             nested_val=nested_val.numpy()
+            start_time2 = t.time()
             pred=model(batch).view(-1).numpy()
+            inf_time += t.time() - start_time2
             batch=batch.numpy()
+            x1=mc_vals[:,0].numpy()
+            x2=mc_vals[:,1].numpy()
 
+            f1 = compute_Fvalue(x1, time_batch)
+            f2 = compute_Fvalue(x2, time_batch)
             pred_f=compute_Fvalue(pred,time_batch)
             loss = np.abs(pred_f-nested_val)
+            mse = np.mean(pred_f**2-f1*pred_f-f2*pred_f+f1*f2)
 
             plt.figure()
             _,_,_ = plt.hist(loss, 100, facecolor='g', alpha=0.75)
@@ -60,7 +75,7 @@ def eval(model, test_loader,device):
             plt.savefig("reg_traj.png")
 
             loss=np.mean(loss)
-        print(f'Test loss: {loss}')
+        print(f'Test loss: {loss}, Test MSE: {mse}, inference time {inf_time/(len(train_loader)*batch.shape[0])}')
 
    
         
@@ -87,7 +102,7 @@ model = nn.Linear(2,1).to(device)
 
 #Define hyper-parameters
 batch_size = 128
-epochs = 20
+epochs = 25
 lr = 0.001
 optimizer = torch.optim.Adam(model.parameters(), lr)
 
