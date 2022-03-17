@@ -75,3 +75,8 @@ def compute_Fvalue(x,t):
     q=timeIdx(1.0)
     disc_pred=np.exp(-rt_int(t,1.0,0,q))*x
     return disc_pred
+
+def compute_Fvalue2(x,t):
+    q=timeIdx(1.0)
+    disc_pred=np.exp(-2*rt_int(t,1.0,0,q))*x
+    return disc_pred
