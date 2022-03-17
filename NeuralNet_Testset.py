@@ -28,12 +28,13 @@ def train(model,epochs,lossFun,train_loader,optimizer,device):
     start_time=t.time()
     for epoch in range(epochs):
         Mloss = 0
-        for batch, target in train_loader:
+        for batch, f1, f2 in train_loader:
             batch=batch.to(device).view(-1,3)
-            target=target.to(device).view(-1)
+            f1=f1.to(device).view(-1)
+            f2=f2.to(device).view(-1)
             
             pred=model(batch).view(-1)
-            loss = lossFun(pred,target)
+            loss = torch.mean(pred**2-f1*pred-f2*pred+f1*f2)
 
             optimizer.zero_grad()
             loss.backward()
@@ -48,19 +49,20 @@ def train(model,epochs,lossFun,train_loader,optimizer,device):
 def eval(model, test_loader,device):
     model=model.to(device)
     with torch.no_grad():
-        for batch,target in test_loader:
+        for batch,f1, f2 in test_loader:
             batch=batch.to(device).view(-1,3)
-            target=target.to(device).view(-1)
+            f1=f1.to(device).view(-1)
+            f2=f2.to(device).view(-1)
             pred=model(batch).view(-1)
-            loss = (pred-target).numpy()
+            loss = torch.mean(pred**2-f1*pred-f2*pred+f1*f2)
                         
-            _,_,_ = plt.hist(loss, 100, facecolor='g', alpha=0.75)
-            plt.grid(True)
-            plt.yscale('log')
-            plt.show()
+            #_,_,_ = plt.hist(loss, 100, facecolor='g', alpha=0.75)
+            #plt.grid(True)
+            #plt.yscale('log')
+            #plt.show()
 
-            loss=np.abs(loss)
-            loss=np.mean(loss)
+            #loss=np.abs(loss)
+            #loss=np.mean(loss)
             
         print(f'Test loss {loss}')
     
@@ -86,13 +88,13 @@ batch_size = 128
 epochs = 30
 lr = 0.001
 lossFun = nn.MSELoss()
-device=torch.device('cuda')
+device=torch.device('cpu')
 
 model = NeuralNet(3, 1, [128,64,32], nn.LeakyReLU()).to(device)
 
 x = torch.stack([price,i_t,time], dim=1).view(-1,3)
 y=torch.stack((f1,f2),dim=1).view(-1,2)
-dataset = torch.utils.data.TensorDataset(x,sum)
+dataset = torch.utils.data.TensorDataset(x,f1, f2)
 train_set,test_set=random_split(dataset,[len(dataset)-len(dataset)//7,len(dataset)//7])
 train_loader=torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True)
 test_loader=torch.utils.data.DataLoader(test_set, batch_size=len(test_set), shuffle=False)
@@ -101,7 +103,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr)
 #model.load_state_dict(torch.load("NN_weights.pth"))
 print('starting training...')
 train(model, epochs, lossFun, train_loader, optimizer,device)
-torch.save(model.state_dict(),"NN_weights.pth")
+#torch.save(model.state_dict(),"NN_weights.pth")
 print('training done.')
 print('Evaluation...')
 device=torch.device('cpu')
