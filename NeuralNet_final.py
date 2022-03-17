@@ -25,8 +25,10 @@ class NeuralNet(nn.Module):
 
 def train(model, epochs, train_loader, optimizer,device):
     start_time=t.time()
+    loss_ = np.zeros(epochs)
     for epoch in range(epochs):
         Mloss = 0
+        inf_time = 0
         for batch, mc_vals,_ in train_loader:
             batch=batch.to(device)
             mc_vals=mc_vals.to(device).view(-1,2)
@@ -41,22 +43,34 @@ def train(model, epochs, train_loader, optimizer,device):
             optimizer.step()
             Mloss += loss
         print(f'[{epoch+1}/{epochs}] loss {Mloss/len(train_loader)}')
+        loss_[epoch] = Mloss/len(train_loader)
 
     end_time=t.time()
     exe_time=end_time-start_time
     print("Training time: ",exe_time,"s")
+    plt.plot(range(epochs), loss_)
+    plt.xlabel('Epoch')
+    plt.ylabel('Mean squared error')
+    plt.plot()
 
 
 def eval(model, test_loader,device):
     model=model.to(device)
     with torch.no_grad():
-        for batch,_,nested_val in test_loader:
+        inf_time=0
+        for batch,mc_vals,nested_val in test_loader:
 
             batch=batch.view(-1,3)
+            start_time2 = t.time()
             pred=model(batch).view(-1).numpy()
+            inf_time += t.time() - start_time2
             nested_val=nested_val.numpy()
+            mc_vals=mc_vals.to(device).view(-1,2)
+            f1=mc_vals[:,0].numpy()
+            f2=mc_vals[:,1].numpy()            
 
             loss = np.abs(pred-nested_val)
+            mse = np.mean(pred**2-f1*pred-f2*pred+f1*f2)
 
             plt.figure()
             _,_,_ = plt.hist(loss, 100, facecolor='g', alpha=0.75)
@@ -72,7 +86,7 @@ def eval(model, test_loader,device):
             plt.savefig("nn_traj.png")
 
             loss=np.mean(loss)
-        print(f'Test loss: {loss}')
+        print(f'Test bias (to nested MC): {loss}, Test MSE: {mse}, inference time {inf_time/(len(test_loader)*batch.shape[0])}')
 
    
         
@@ -99,7 +113,7 @@ model = NeuralNet(3, 1, [128,64,32], nn.LeakyReLU()).to(device)
 
 #Define hyper-parameters
 batch_size = 128
-epochs = 20
+epochs = 25
 lr = 0.001
 optimizer = torch.optim.Adam(model.parameters(), lr)
 lossFun = nn.MSELoss()
