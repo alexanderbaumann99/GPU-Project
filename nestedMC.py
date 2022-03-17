@@ -2,6 +2,8 @@ import numpy as np
 from os.path import join
 import matplotlib.pyplot as plt
 
+from auxiliary import compute_Fvalue2
+
 Nouter = 8192
 Ninner = 4096
 
@@ -14,10 +16,12 @@ sum = np.loadtxt(join(file_dir, 'sum_c.txt'), delimiter=',', usecols=1)
 sum2 = np.loadtxt(join(file_dir, 'sum2_c.txt'), delimiter=',', usecols=1)
 
 ### calulate variance
-variance = sum2 - np.square(sum)
+print(sum)
+print(sum2)
+variance = compute_Fvalue2(sum2 - np.square(sum), time)/Ninner
 print('Mean variance', np.mean(variance))
 
 ### visualize
 plt.scatter(time, price, c=variance, s=1, cmap='seismic')
 plt.colorbar()
-#plt.show()
+plt.show()
