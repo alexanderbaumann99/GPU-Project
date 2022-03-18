@@ -304,27 +304,22 @@ __device__ void Euler_d(float *S2, float S1, float r0,
 // Monte Carlo routines
 __global__ void MCouter_k(int P1, int P2, float x_0, float dt, 
 					 float B, float K, int L, int M,
-					 int Nouter, TabSeedCMRG_t *pt_cmrg,
+					 int Nouter, int Ninner, TabSeedCMRG_t *pt_cmrg,
 					 float* time, float* price, int* i_t){
 
   // threadIdx.x and blockIdx.x -> index outer trajectory
   int idx_outer = threadIdx.x + blockDim.x * blockIdx.x;
-
   int a0, a1, a2, a3, a4, a5, k, i, q, P;
   float g0, g1, Sk, Skp1, t, v;
-
-  //extern __shared__ float H[];
-
 
   if(idx_outer < Nouter){
 
     Sk = x_0;
     P = 0;
-
-    // can we make this access to pt_cmrg contiguous?
-    CMRG_get_d(&a0, &a1, &a2, &a3, &a4, &a5, pt_cmrg[0][idx_outer][0]);
+    CMRG_get_d(&a0, &a1, &a2, &a3, &a4, &a5, pt_cmrg[0][int(idx_outer/Ninner)][idx_outer%Ninner]);
 
     for (k=0; k<M-1; k++){
+		// calculate stock trajectory
       for (i=1; i<=L; i++){
         t = dt*dt*(i+L*k);
         q = timeIdx(t);
@@ -335,17 +330,14 @@ __global__ void MCouter_k(int P1, int P2, float x_0, float dt,
         Sk = Skp1;  
       }
       P += (Sk<B);
-      
-      // save results
-      // maybe its faster to put values in shared memory first and to have one
-      // thread per block copy the results for the whole block over to the global
-      // memory? does this even matter in outer MC?
+
+	  // save results
       time[idx_outer+k*Nouter] = t;
       price[idx_outer+k*Nouter] = Sk;
       i_t[idx_outer+k*Nouter] = P;
     }
 
-    CMRG_set_d(&a0, &a1, &a2, &a3, &a4, &a5, pt_cmrg[0][idx_outer][0]);
+    CMRG_set_d(&a0, &a1, &a2, &a3, &a4, &a5, pt_cmrg[0][int(idx_outer/Ninner)][idx_outer%Ninner]);
   }
   
 }
@@ -522,7 +514,7 @@ int main()
   // calculate outer trajectories
   int Nblocks = (Nouter+threads_per_block-1)/threads_per_block; // ceiling function
 	MCouter_k<<<Nblocks,threads_per_block,2*threads_per_block*sizeof(float)>>>
-    (P1, P2, x_0, dt, B, K, leng, M, Nouter, CMRG, time, price, i_t);
+    (P1, P2, x_0, dt, B, K, leng, M, Nouter, Ninner, CMRG, time, price, i_t);
 
 	// GPU timer instructions
 	cudaEventCreate(&start);			
